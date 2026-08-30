@@ -228,7 +228,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       <header className="bg-[#0A192F] text-white py-3.5 px-6 sm:px-10 flex justify-between items-center shadow-md shrink-0 border-b border-[#D4AF37]/30">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-[#FAF7F0] rounded-md flex items-center justify-center p-1 overflow-hidden border border-[#D4AF37]/40">
-            <img src="/official-logo.png" alt="GenZ Logo" className="w-full h-full object-contain" />
+            <img src="https://i.postimg.cc/ZKgzktH4/official-logo.jpg" alt="GenZ Logo" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="text-base font-bold tracking-tight uppercase">GenZ Upskill Foundation</h1>

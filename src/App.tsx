@@ -206,7 +206,7 @@ export default function App() {
         <div className="flex items-center gap-3.5">
           <div className="w-11 h-11 bg-[#FAF7F0] rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0 overflow-hidden border border-[#D4AF37]/40">
             <img
-              src="/official-logo.png"
+              src="https://i.postimg.cc/ZKgzktH4/official-logo.jpg"
               alt="GenZ Upskill Foundation Logo"
               referrerPolicy="no-referrer"
               className="w-full h-full object-contain"

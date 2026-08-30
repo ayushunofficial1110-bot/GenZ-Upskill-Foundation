@@ -20,7 +20,7 @@ export const Logo: React.FC<LogoProps> = ({
     return (
       <div className={`relative inline-flex items-center justify-center ${className}`}>
         <img
-          src="/official-logo.png"
+          src="https://i.postimg.cc/ZKgzktH4/official-logo.jpg"
           alt="GenZ Upskill Foundation Logo"
           referrerPolicy="no-referrer"
           className="w-12 h-12 object-contain"
@@ -34,7 +34,7 @@ export const Logo: React.FC<LogoProps> = ({
       <div className={`inline-flex items-center gap-3 ${className}`}>
         <div className="w-10 h-10 rounded-lg bg-[#FAF7F0] border border-[#D4AF37]/40 flex items-center justify-center p-1 shadow-xs overflow-hidden">
           <img
-            src="/official-logo.png"
+            src="https://i.postimg.cc/ZKgzktH4/official-logo.jpg"
             alt="GenZ Upskill Foundation Emblem"
             referrerPolicy="no-referrer"
             className="w-full h-full object-contain"
@@ -59,7 +59,7 @@ export const Logo: React.FC<LogoProps> = ({
       <div className={`flex flex-col items-center text-center ${className}`}>
         <div className="relative w-48 h-48 sm:w-56 sm:h-56 mb-4 drop-shadow-md bg-[#FAF7F0] rounded-2xl p-2 border border-[#E5DEC9] flex items-center justify-center">
           <img
-            src="/official-logo.png"
+            src="https://i.postimg.cc/ZKgzktH4/official-logo.jpg"
             alt="GenZ Upskill Foundation Official Logo"
             referrerPolicy="no-referrer"
             className="w-full h-full object-contain rounded-xl"
@@ -89,7 +89,7 @@ export const Logo: React.FC<LogoProps> = ({
     <div className={`flex items-center gap-3.5 ${className}`}>
       <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-[#FAF7F0] border border-[#D4AF37]/40 p-1.5 shadow-xs flex items-center justify-center shrink-0 overflow-hidden">
         <img
-          src="/official-logo.png"
+          src="https://i.postimg.cc/ZKgzktH4/official-logo.jpg"
           alt="GenZ Upskill Foundation Logo"
           referrerPolicy="no-referrer"
           className="w-full h-full object-contain"
