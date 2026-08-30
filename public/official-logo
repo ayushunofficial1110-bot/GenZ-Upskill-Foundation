@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#FDFBF7" />
+      <stop offset="100%" stop-color="#F5EFEB" />
+    </radialGradient>
+    <linearGradient id="navyRibbon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0A192F" />
+      <stop offset="40%" stop-color="#112240" />
+      <stop offset="100%" stop-color="#05101E" />
+    </linearGradient>
+    <linearGradient id="greenRibbon" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#047857" />
+      <stop offset="50%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#34D399" />
+    </linearGradient>
+    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="6" stdDeviation="6" flood-color="#05101E" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  <g opacity="0.4" fill="#0A192F">
+    <circle cx="430" cy="40" r="3" /><circle cx="445" cy="40" r="3" /><circle cx="460" cy="40" r="3" /><circle cx="475" cy="40" r="3" />
+    <circle cx="430" cy="55" r="3" /><circle cx="445" cy="55" r="3" /><circle cx="460" cy="55" r="3" /><circle cx="475" cy="55" r="3" />
+    <circle cx="430" cy="70" r="3" /><circle cx="445" cy="70" r="3" /><circle cx="460" cy="70" r="3" /><circle cx="475" cy="70" r="3" />
+  </g>
+  <g transform="translate(0, -10)">
+    <path d="M 235 155 C 165 140 125 185 125 240 C 125 295 170 325 220 310 C 255 300 280 265 250 260 C 220 255 205 270 180 265 C 160 260 155 235 165 215 C 180 185 220 185 245 200 C 255 205 265 200 260 185 C 255 170 245 158 235 155 Z" fill="url(#navyRibbon)" filter="url(#dropShadow)" />
+    <circle cx="160" cy="275" r="3" fill="#F59E0B" />
+    <line x1="160" y1="275" x2="180" y2="255" stroke="#F59E0B" stroke-width="1.5" />
+    <circle cx="180" cy="255" r="2.5" fill="#F59E0B" />
+    <circle cx="205" cy="245" r="3" fill="#F59E0B" />
+    <line x1="205" y1="245" x2="225" y2="230" stroke="#F59E0B" stroke-width="1.5" />
+    <circle cx="225" cy="230" r="2.5" fill="#F59E0B" />
+    <path d="M 235 295 C 270 300 310 325 355 315 C 395 305 410 270 395 240 C 375 205 325 210 290 250 C 260 285 230 300 205 295 C 225 315 260 335 310 330 C 370 325 415 285 395 230 C 375 185 315 190 275 245 C 255 270 240 288 235 295 Z" fill="url(#greenRibbon)" filter="url(#dropShadow)" />
+    <line x1="330" y1="275" x2="355" y2="270" stroke="#D97706" stroke-width="3.5" stroke-linecap="round" />
+    <line x1="322" y1="287" x2="347" y2="282" stroke="#D97706" stroke-width="3.5" stroke-linecap="round" />
+    <line x1="314" y1="299" x2="339" y2="294" stroke="#D97706" stroke-width="3.5" stroke-linecap="round" />
+    <circle cx="265" cy="140" r="10" fill="#1E293B" />
+    <path d="M 250 170 Q 260 148 268 152 Q 262 175 275 195 C 265 195 255 185 250 170 Z" fill="#1E293B" />
+    <path d="M 255 175 C 270 135 290 95 290 80 L 250 105 L 285 75 L 305 125 L 290 110 C 290 130 265 170 255 175 Z" fill="url(#greenRibbon)" filter="url(#dropShadow)" />
+  </g>
+  <g transform="translate(0, 305)">
+    <g transform="translate(190, 0)">
+      <circle cx="0" cy="0" r="19" fill="#0A192F" stroke="#F59E0B" stroke-width="1.5" filter="url(#dropShadow)" />
+      <path d="M -9 -5 C -4 -7 0 -5 0 -5 C 0 -5 4 -7 9 -5 L 9 6 C 4 4 0 6 0 6 C 0 6 -4 4 -9 6 Z" fill="none" stroke="#FDFBF7" stroke-width="1.5" />
+      <line x1="0" y1="-5" x2="0" y2="6" stroke="#FDFBF7" stroke-width="1.5" />
+      <text x="0" y="24" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="700" fill="#0A192F">LEARN</text>
+    </g>
+    <g transform="translate(250, 0)">
+      <circle cx="0" cy="0" r="21" fill="#047857" stroke="#34D399" stroke-width="1.5" filter="url(#dropShadow)" />
+      <path d="M -6 -6 C -9 -3 -8 3 -5 5 C -2 7 2 7 5 5 C 8 3 9 -3 6 -6 C 4 -8 -4 -8 -6 -6 Z" fill="none" stroke="#FDFBF7" stroke-width="1.5" />
+      <circle cx="-2" cy="-1" r="1.5" fill="#FDFBF7" />
+      <circle cx="2" cy="1" r="1.5" fill="#FDFBF7" />
+      <text x="0" y="24" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="700" fill="#047857">UPSKILL</text>
+    </g>
+    <g transform="translate(310, 0)">
+      <circle cx="0" cy="0" r="19" fill="#D97706" stroke="#FDE68A" stroke-width="1.5" filter="url(#dropShadow)" />
+      <rect x="-8" y="1" width="3" height="6" fill="#FDFBF7" />
+      <rect x="-3" y="-3" width="3" height="10" fill="#FDFBF7" />
+      <rect x="2" y="-7" width="3" height="14" fill="#FDFBF7" />
+      <polyline points="-8,-4 -2,-7 5,-9" fill="none" stroke="#FDE68A" stroke-width="1.5" />
+      <text x="0" y="24" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="700" fill="#D97706">GROW</text>
+    </g>
+  </g>
+  <g transform="translate(250, 375)">
+    <text x="0" y="0" text-anchor="middle" font-family="sans-serif" font-size="30" font-weight="900" fill="#0A192F" letter-spacing="3.5">
+      <tspan fill="#0A192F">GEN</tspan><tspan fill="#047857">Z</tspan> <tspan fill="#0A192F">UPSKILL</tspan>
+    </text>
+    <text x="0" y="22" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#1E293B" letter-spacing="8">
+      — FOUNDATION —
+    </text>
+    <text x="0" y="42" text-anchor="middle" font-family="sans-serif" font-size="10.5" font-weight="700" fill="#047857" letter-spacing="2.5">
+      SKILLS FOR A BETTER TOMORROW
+    </text>
+  </g>
+</svg>

@@ -1,0 +1,6 @@
+{
+  "name": "GenZ Upskill Foundation – Candidate Interview Portal",
+  "description": "Official candidate interview and video recording portal for GenZ Upskill Foundation internship programs.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

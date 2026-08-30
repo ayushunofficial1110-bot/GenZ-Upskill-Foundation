@@ -1,0 +1,355 @@
+{
+  "candidates": [
+    {
+      "id": "CAND-mt03rm8d-07xy",
+      "fullName": "AYUSH SRIVASTAV",
+      "email": "ayushunofficial1110@gmail.com",
+      "mobile": "8423571317",
+      "college": "rsmt",
+      "domain": "Human Resources (HR)",
+      "createdAt": "2026-08-19T13:03:45.229Z"
+    },
+    {
+      "id": "CAND-mt8ankwn-de7g",
+      "fullName": "Aarav Mehta",
+      "email": "aarav.mehta.interview@gmail.com",
+      "mobile": "+91 9811223344",
+      "college": "IIT Delhi",
+      "domain": "Full Stack Web Development",
+      "createdAt": "2026-08-25T06:38:43.607Z"
+    }
+  ],
+  "interviews": [
+    {
+      "id": "GZ-MT03QHAV-76RQ",
+      "candidateId": "CAND-mt03rm8d-07xy",
+      "candidateName": "AYUSH SRIVASTAV",
+      "candidateEmail": "ayushunofficial1110@gmail.com",
+      "candidateMobile": "8423571317",
+      "candidateCollege": "rsmt",
+      "domain": "Human Resources (HR)",
+      "status": "submitted",
+      "startedAt": "2026-08-19T13:03:09.229Z",
+      "completedAt": "2026-08-19T13:03:45.229Z",
+      "recordingPath": "GZ-MT03QHAV-76RQ_1787144604699.webm",
+      "recordingSize": 7291204,
+      "recordingDurationSeconds": 36,
+      "driveFileId": "1KGHgExCa6ajPXKdcP45LZSIpGeBNixCQ",
+      "driveViewLink": "https://drive.google.com/file/d/1KGHgExCa6ajPXKdcP45LZSIpGeBNixCQ/view?usp=drivesdk",
+      "driveDownloadLink": "https://drive.google.com/uc?id=1KGHgExCa6ajPXKdcP45LZSIpGeBNixCQ&export=download",
+      "answers": [
+        {
+          "questionId": "hr-1",
+          "questionText": "Please introduce yourself and tell us a little about yourself.",
+          "questionOrder": 1,
+          "startedAtSeconds": 19,
+          "completedAtSeconds": 23,
+          "durationSeconds": 4
+        },
+        {
+          "questionId": "hr-2",
+          "questionText": "Why are you interested in Human Resources?",
+          "questionOrder": 2,
+          "startedAtSeconds": 23,
+          "completedAtSeconds": 26,
+          "durationSeconds": 3
+        },
+        {
+          "questionId": "hr-3",
+          "questionText": "What do you think is the most important quality of a good HR person?",
+          "questionOrder": 3,
+          "startedAtSeconds": 26,
+          "completedAtSeconds": 29,
+          "durationSeconds": 3
+        },
+        {
+          "questionId": "hr-4",
+          "questionText": "How would you communicate with a candidate who has questions about an internship?",
+          "questionOrder": 4,
+          "startedAtSeconds": 29,
+          "completedAtSeconds": 32,
+          "durationSeconds": 3
+        },
+        {
+          "questionId": "hr-5",
+          "questionText": "What would you do if an intern is not completing their assigned task on time?",
+          "questionOrder": 5,
+          "startedAtSeconds": 32,
+          "completedAtSeconds": 34,
+          "durationSeconds": 2
+        },
+        {
+          "questionId": "hr-6",
+          "questionText": "Why is communication important in an HR role?",
+          "questionOrder": 6,
+          "startedAtSeconds": 34,
+          "completedAtSeconds": 36,
+          "durationSeconds": 2
+        }
+      ],
+      "hrReviewStatus": "pending",
+      "createdAt": "2026-08-19T13:03:45.229Z"
+    },
+    {
+      "id": "GZ-MT048GHL-4GNY",
+      "candidateId": "CAND-mt04brlo-1tje",
+      "candidateName": "AYUSH SRIVASTAV",
+      "candidateEmail": "ayushunofficial1110@gmail.com",
+      "candidateMobile": "43634737",
+      "candidateCollege": "gf",
+      "domain": "Social Media Marketing (SMM)",
+      "status": "submitted",
+      "startedAt": "2026-08-19T13:18:43.308Z",
+      "completedAt": "2026-08-19T13:19:25.308Z",
+      "recordingPath": "GZ-MT048GHL-4GNY_1787145555231.webm",
+      "recordingSize": 8007010,
+      "recordingDurationSeconds": 42,
+      "driveFileId": "1GHjlqZxr2peiTU8QBeamtQaewm1fPQV1",
+      "driveViewLink": "https://drive.google.com/file/d/1GHjlqZxr2peiTU8QBeamtQaewm1fPQV1/view?usp=drivesdk",
+      "driveDownloadLink": "https://drive.google.com/uc?id=1GHjlqZxr2peiTU8QBeamtQaewm1fPQV1&export=download",
+      "answers": [
+        {
+          "questionId": "smm-1",
+          "questionText": "Please introduce yourself and tell us a little about yourself.",
+          "questionOrder": 1,
+          "startedAtSeconds": 26,
+          "completedAtSeconds": 28,
+          "durationSeconds": 2
+        },
+        {
+          "questionId": "smm-2",
+          "questionText": "Why are you interested in Social Media Marketing?",
+          "questionOrder": 2,
+          "startedAtSeconds": 28,
+          "completedAtSeconds": 29,
+          "durationSeconds": 1
+        },
+        {
+          "questionId": "smm-3",
+          "questionText": "Which social media platform do you use the most, and why?",
+          "questionOrder": 3,
+          "startedAtSeconds": 29,
+          "completedAtSeconds": 31,
+          "durationSeconds": 2
+        },
+        {
+          "questionId": "smm-4",
+          "questionText": "If you had to promote GenZ Upskill Foundation on Instagram, what would you do first?",
+          "questionOrder": 4,
+          "startedAtSeconds": 31,
+          "completedAtSeconds": 32,
+          "durationSeconds": 1
+        },
+        {
+          "questionId": "smm-5",
+          "questionText": "What makes a social media post interesting and engaging?",
+          "questionOrder": 5,
+          "startedAtSeconds": 32,
+          "completedAtSeconds": 33,
+          "durationSeconds": 1
+        },
+        {
+          "questionId": "smm-6",
+          "questionText": "How would you use a simple graphic or design to make a social media post better?",
+          "questionOrder": 6,
+          "startedAtSeconds": 33,
+          "completedAtSeconds": 42,
+          "durationSeconds": 9
+        }
+      ],
+      "hrReviewStatus": "pending",
+      "createdAt": "2026-08-19T13:19:25.308Z"
+    },
+    {
+      "id": "GZ-MT89SIV8-QCV4",
+      "candidateId": "CAND-mt8a1ptd-zmf7",
+      "candidateName": "AYUSH SRIVASTAV",
+      "candidateEmail": "ayushunofficial1110@gmail.com",
+      "candidateMobile": "456",
+      "candidateCollege": "gdgm",
+      "domain": "Social Media Marketing (SMM)",
+      "status": "submitted",
+      "startedAt": "2026-08-25T06:20:33.537Z",
+      "completedAt": "2026-08-25T06:21:43.537Z",
+      "recordingPath": "GZ-MT89SIV8-QCV4_1787638787223.mp4",
+      "recordingSize": 43174107,
+      "recordingDurationSeconds": 70,
+      "driveFileId": "13Hhf9WPwYQzxKXLSdQLxfSFu707zsz8p",
+      "driveViewLink": "https://drive.google.com/file/d/13Hhf9WPwYQzxKXLSdQLxfSFu707zsz8p/view?usp=drivesdk",
+      "driveDownloadLink": "https://drive.google.com/uc?id=13Hhf9WPwYQzxKXLSdQLxfSFu707zsz8p&export=download",
+      "answers": [
+        {
+          "questionId": "smm-1",
+          "questionText": "Please introduce yourself and tell us a little about yourself.",
+          "questionOrder": 1,
+          "startedAtSeconds": 16,
+          "completedAtSeconds": 20,
+          "durationSeconds": 4
+        },
+        {
+          "questionId": "smm-2",
+          "questionText": "Why are you interested in Social Media Marketing?",
+          "questionOrder": 2,
+          "startedAtSeconds": 20,
+          "completedAtSeconds": 23,
+          "durationSeconds": 3
+        },
+        {
+          "questionId": "smm-3",
+          "questionText": "Which social media platform do you use the most, and why?",
+          "questionOrder": 3,
+          "startedAtSeconds": 23,
+          "completedAtSeconds": 28,
+          "durationSeconds": 5
+        },
+        {
+          "questionId": "smm-4",
+          "questionText": "If you had to promote GenZ Upskill Foundation on Instagram, what would you do first?",
+          "questionOrder": 4,
+          "startedAtSeconds": 28,
+          "completedAtSeconds": 31,
+          "durationSeconds": 3
+        },
+        {
+          "questionId": "smm-5",
+          "questionText": "What makes a social media post interesting and engaging?",
+          "questionOrder": 5,
+          "startedAtSeconds": 31,
+          "completedAtSeconds": 46,
+          "durationSeconds": 15
+        },
+        {
+          "questionId": "smm-6",
+          "questionText": "How would you use a simple graphic or design to make a social media post better?",
+          "questionOrder": 6,
+          "startedAtSeconds": 46,
+          "completedAtSeconds": 70,
+          "durationSeconds": 24
+        }
+      ],
+      "hrReviewStatus": "pending",
+      "createdAt": "2026-08-25T06:21:43.537Z"
+    },
+    {
+      "id": "GZ-MT8ANCAG-DLNC",
+      "candidateId": "CAND-mt8ankwn-de7g",
+      "candidateName": "Aarav Mehta",
+      "candidateEmail": "aarav.mehta.interview@gmail.com",
+      "candidateMobile": "+91 9811223344",
+      "candidateCollege": "IIT Delhi",
+      "domain": "Full Stack Web Development",
+      "status": "submitted",
+      "startedAt": "2026-08-25T06:38:08.607Z",
+      "completedAt": "2026-08-25T06:38:43.607Z",
+      "recordingPath": "GZ-MT8ANCAG-DLNC_1787639920986.mp4",
+      "recordingSize": 1022623,
+      "recordingDurationSeconds": 35,
+      "driveFileId": "1ERySlPvny42w3PUrKrmu5ph6zwXEbZi5",
+      "driveViewLink": "https://drive.google.com/file/d/1ERySlPvny42w3PUrKrmu5ph6zwXEbZi5/view?usp=drivesdk",
+      "driveDownloadLink": "https://drive.google.com/uc?id=1ERySlPvny42w3PUrKrmu5ph6zwXEbZi5&export=download",
+      "answers": [
+        {
+          "questionId": "fswd-1",
+          "questionOrder": 1,
+          "durationSeconds": 6
+        },
+        {
+          "questionId": "fswd-2",
+          "questionOrder": 2,
+          "durationSeconds": 6
+        },
+        {
+          "questionId": "fswd-3",
+          "questionOrder": 3,
+          "durationSeconds": 6
+        },
+        {
+          "questionId": "fswd-4",
+          "questionOrder": 4,
+          "durationSeconds": 6
+        },
+        {
+          "questionId": "fswd-5",
+          "questionOrder": 5,
+          "durationSeconds": 6
+        },
+        {
+          "questionId": "fswd-6",
+          "questionOrder": 6,
+          "durationSeconds": 5
+        }
+      ],
+      "hrReviewStatus": "pending",
+      "createdAt": "2026-08-25T06:38:43.607Z"
+    },
+    {
+      "id": "GZ-MTFJ11ED-AKZC",
+      "candidateId": "CAND-mtfj14z7-mgzi",
+      "candidateName": "AYUSH SRIVASTAV",
+      "candidateEmail": "ayushunofficial1110@gmail.com",
+      "candidateMobile": "897",
+      "candidateCollege": "hj",
+      "domain": "Social Media Marketing (SMM)",
+      "status": "submitted",
+      "processingStatus": "failed",
+      "startedAt": "2026-08-30T08:07:25.307Z",
+      "completedAt": "2026-08-30T08:07:36.307Z",
+      "recordingPath": "GZ-MTFJ11ED-AKZC_1788077256302.webm",
+      "recordingSize": 4347234,
+      "recordingDurationSeconds": 11,
+      "answers": [
+        {
+          "questionId": "smm-1",
+          "questionText": "Please introduce yourself and tell us a little about yourself.",
+          "questionOrder": 1,
+          "startedAtSeconds": 4,
+          "completedAtSeconds": 5,
+          "durationSeconds": 1
+        },
+        {
+          "questionId": "smm-2",
+          "questionText": "Why are you interested in Social Media Marketing?",
+          "questionOrder": 2,
+          "startedAtSeconds": 5,
+          "completedAtSeconds": 5,
+          "durationSeconds": 1
+        },
+        {
+          "questionId": "smm-3",
+          "questionText": "Which social media platform do you use the most, and why?",
+          "questionOrder": 3,
+          "startedAtSeconds": 5,
+          "completedAtSeconds": 6,
+          "durationSeconds": 1
+        },
+        {
+          "questionId": "smm-4",
+          "questionText": "If you had to promote GenZ Upskill Foundation on Instagram, what would you do first?",
+          "questionOrder": 4,
+          "startedAtSeconds": 6,
+          "completedAtSeconds": 7,
+          "durationSeconds": 1
+        },
+        {
+          "questionId": "smm-5",
+          "questionText": "What makes a social media post interesting and engaging?",
+          "questionOrder": 5,
+          "startedAtSeconds": 7,
+          "completedAtSeconds": 8,
+          "durationSeconds": 1
+        },
+        {
+          "questionId": "smm-6",
+          "questionText": "How would you use a simple graphic or design to make a social media post better?",
+          "questionOrder": 6,
+          "startedAtSeconds": 8,
+          "completedAtSeconds": 11,
+          "durationSeconds": 3
+        }
+      ],
+      "hrReviewStatus": "pending",
+      "createdAt": "2026-08-30T08:07:36.307Z",
+      "processingError": "Google Drive upload failed: invalid_grant"
+    }
+  ]
+}
