@@ -3,23 +3,46 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InternshipDomain, CandidateFormData } from '../types';
 import { DEFAULT_DOMAINS } from '../lib/questions';
-import { User, Mail, Phone, GraduationCap, Briefcase, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
+import { CountrySelect } from './CountrySelect';
+import { User, Mail, Phone, GraduationCap, Briefcase, ArrowRight, ArrowLeft, AlertCircle, Lock } from 'lucide-react';
+
+export const COUNTRY_CODES = [
+  { code: '+91', country: 'India (IN)' },
+  { code: '+1', country: 'USA/Canada (US/CA)' },
+  { code: '+44', country: 'UK (GB)' },
+  { code: '+971', country: 'UAE (AE)' },
+  { code: '+65', country: 'Singapore (SG)' },
+  { code: '+61', country: 'Australia (AU)' },
+  { code: '+49', country: 'Germany (DE)' },
+  { code: '+966', country: 'Saudi Arabia (SA)' },
+  { code: '+880', country: 'Bangladesh (BD)' },
+  { code: '+977', country: 'Nepal (NP)' },
+  { code: '+94', country: 'Sri Lanka (LK)' },
+];
 
 interface CandidateFormProps {
   initialData: CandidateFormData;
+  isDomainLocked?: boolean;
   onSubmit: (data: CandidateFormData) => void;
   onBack: () => void;
 }
 
 export const CandidateForm: React.FC<CandidateFormProps> = ({
   initialData,
+  isDomainLocked = false,
   onSubmit,
   onBack,
 }) => {
-  const [formData, setFormData] = useState<CandidateFormData>(initialData);
+  const [formData, setFormData] = useState<CandidateFormData>({
+    ...initialData,
+    countryCode: initialData.countryCode || '+91',
+  });
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(
+    initialData.countryCode || '+91'
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = (): boolean => {
@@ -31,16 +54,18 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
       newErrors.fullName = 'Please enter a valid full name.';
     }
 
-    if (!formData.email.trim()) {
+    const emailTrimmed = formData.email.trim();
+    if (!emailTrimmed) {
       newErrors.email = 'Email address is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      newErrors.email = 'Please enter a valid email address.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      newErrors.email = 'Please enter a valid email address (e.g., yourname@domain.com).';
     }
 
-    if (!formData.mobile.trim()) {
+    const digitsOnly = formData.mobile.replace(/\D/g, '');
+    if (!digitsOnly) {
       newErrors.mobile = 'Mobile number is required.';
-    } else if (formData.mobile.trim().replace(/\D/g, '').length < 8) {
-      newErrors.mobile = 'Please enter a valid contact number (at least 8 digits).';
+    } else if (digitsOnly.length < 8 || digitsOnly.length > 15) {
+      newErrors.mobile = 'Please enter a valid mobile number (8-15 digits).';
     }
 
     if (!formData.college.trim()) {
@@ -55,10 +80,25 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value;
+    // Restrict input to numeric digits only
+    const cleanDigits = rawVal.replace(/\D/g, '').slice(0, 15);
+    setFormData({ ...formData, mobile: cleanDigits });
+    if (errors.mobile) {
+      setErrors((prev) => ({ ...prev, mobile: '' }));
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
-      onSubmit(formData);
+      const fullMobile = `${selectedCountryCode} ${formData.mobile.trim()}`;
+      onSubmit({
+        ...formData,
+        countryCode: selectedCountryCode,
+        mobile: fullMobile,
+      });
     }
   };
 
@@ -91,7 +131,10 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
                 id="input-full-name"
                 type="text"
                 value={formData.fullName}
-                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, fullName: e.target.value });
+                  if (errors.fullName) setErrors((prev) => ({ ...prev, fullName: '' }));
+                }}
                 placeholder="e.g. Priya Sharma"
                 className={`w-full pl-10 pr-4 py-2.5 rounded-lg border text-sm text-[#0A192F] bg-[#FAF7F0]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1B4D36] transition-all ${
                   errors.fullName ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
@@ -119,7 +162,10 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
                 id="input-email"
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, email: e.target.value });
+                  if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
+                }}
                 placeholder="e.g. priya.sharma@example.com"
                 className={`w-full pl-10 pr-4 py-2.5 rounded-lg border text-sm text-[#0A192F] bg-[#FAF7F0]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1B4D36] transition-all ${
                   errors.email ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
@@ -134,25 +180,37 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
             )}
           </div>
 
-          {/* Mobile Number */}
+          {/* Mobile Number with Country Code */}
           <div>
             <label htmlFor="input-mobile" className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1.5">
-              Mobile Number <span className="text-red-500">*</span>
+              Mobile Number (Digits Only) <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Phone className="w-4 h-4" />
+            <div className="flex gap-2">
+              {/* Country code selector */}
+              <div className="w-28 sm:w-32 shrink-0">
+                <CountrySelect
+                  value={selectedCountryCode}
+                  onChange={(dialCode) => setSelectedCountryCode(dialCode)}
+                />
               </div>
-              <input
-                id="input-mobile"
-                type="tel"
-                value={formData.mobile}
-                onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                placeholder="e.g. +91 9876543210"
-                className={`w-full pl-10 pr-4 py-2.5 rounded-lg border text-sm text-[#0A192F] bg-[#FAF7F0]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1B4D36] transition-all ${
-                  errors.mobile ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
-                }`}
-              />
+
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <input
+                  id="input-mobile"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={formData.mobile}
+                  onChange={handleMobileChange}
+                  placeholder="9876543210"
+                  className={`w-full pl-10 pr-4 py-2.5 rounded-lg border text-sm font-mono text-[#0A192F] bg-[#FAF7F0]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1B4D36] transition-all ${
+                    errors.mobile ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
+                  }`}
+                />
+              </div>
             </div>
             {errors.mobile && (
               <p className="text-red-600 text-xs mt-1 flex items-center gap-1 font-medium">
@@ -175,7 +233,10 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
                 id="input-college"
                 type="text"
                 value={formData.college}
-                onChange={(e) => setFormData({ ...formData, college: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, college: e.target.value });
+                  if (errors.college) setErrors((prev) => ({ ...prev, college: '' }));
+                }}
                 placeholder="e.g. National Institute of Technology"
                 className={`w-full pl-10 pr-4 py-2.5 rounded-lg border text-sm text-[#0A192F] bg-[#FAF7F0]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1B4D36] transition-all ${
                   errors.college ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
@@ -192,18 +253,27 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
 
           {/* Internship Domain Dropdown */}
           <div>
-            <label htmlFor="select-domain" className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1.5">
-              Internship Domain <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="select-domain" className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider">
+                Internship Domain <span className="text-red-500">*</span>
+              </label>
+              {isDomainLocked && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#1B4D36] bg-[#EAF3EE] px-2 py-0.5 rounded border border-[#2E7D56]/30">
+                  <Lock className="w-3 h-3" />
+                  Locked via Invitation Link
+                </span>
+              )}
+            </div>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                 <Briefcase className="w-4 h-4" />
               </div>
               <select
                 id="select-domain"
+                disabled={isDomainLocked}
                 value={formData.domain}
                 onChange={(e) => setFormData({ ...formData, domain: e.target.value as InternshipDomain })}
-                className={`w-full pl-10 pr-8 py-2.5 rounded-lg border text-sm text-[#0A192F] bg-[#FAF7F0]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1B4D36] transition-all appearance-none cursor-pointer ${
+                className={`w-full pl-10 pr-8 py-2.5 rounded-lg border text-sm text-[#0A192F] bg-[#FAF7F0]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1B4D36] transition-all appearance-none cursor-pointer disabled:bg-slate-100 disabled:text-slate-700 disabled:cursor-not-allowed ${
                   errors.domain ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
                 }`}
               >
@@ -213,9 +283,11 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
                   </option>
                 ))}
               </select>
-              <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-500">
-                ▼
-              </div>
+              {!isDomainLocked && (
+                <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-500 text-xs">
+                  ▼
+                </div>
+              )}
             </div>
             {errors.domain && (
               <p className="text-red-600 text-xs mt-1 flex items-center gap-1 font-medium">

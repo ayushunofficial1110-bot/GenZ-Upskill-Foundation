@@ -7,16 +7,79 @@ import { InternshipDomain, InterviewQuestion, InterviewIntroStep } from '../type
 
 export const DEFAULT_DOMAINS: InternshipDomain[] = [
   'Social Media Marketing (SMM)',
-  'Content Writing',
-  'Human Resources (HR)',
+  'Content Writing (CW)',
   'AI',
 ];
 
+const CONTENT_WRITING_QUESTIONS: InterviewQuestion[] = [
+  {
+    id: 'cw-1',
+    domain: 'Content Writing (CW)',
+    questionOrder: 1,
+    order: 1,
+    questionText: 'Please introduce yourself and tell us a little about yourself.',
+    english: 'Please introduce yourself and tell us a little about yourself.',
+    hindi: 'कृपया अपना परिचय दें और अपने बारे में थोड़ा बताएं।',
+    active: true,
+  },
+  {
+    id: 'cw-2',
+    domain: 'Content Writing (CW)',
+    questionOrder: 2,
+    order: 2,
+    questionText: 'Why are you interested in Content Writing?',
+    english: 'Why are you interested in Content Writing?',
+    hindi: 'आप Content Writing में रुचि क्यों रखते हैं?',
+    active: true,
+  },
+  {
+    id: 'cw-3',
+    domain: 'Content Writing (CW)',
+    questionOrder: 3,
+    order: 3,
+    questionText: 'What do you think makes a piece of content interesting to read?',
+    english: 'What do you think makes a piece of content interesting to read?',
+    hindi: 'आपके अनुसार किसी content को पढ़ने में interesting क्या बनाता है?',
+    active: true,
+  },
+  {
+    id: 'cw-4',
+    domain: 'Content Writing (CW)',
+    questionOrder: 4,
+    order: 4,
+    questionText: 'If you have to write a post for GenZ Upskill Foundation, what topic would you choose and why?',
+    english: 'If you have to write a post for GenZ Upskill Foundation, what topic would you choose and why?',
+    hindi: 'अगर आपको GenZ Upskill Foundation के लिए एक post लिखनी हो, तो आप कौन-सा topic चुनेंगे और क्यों?',
+    active: true,
+  },
+  {
+    id: 'cw-5',
+    domain: 'Content Writing (CW)',
+    questionOrder: 5,
+    order: 5,
+    questionText: 'How would you write a short and interesting caption for an Instagram post?',
+    english: 'How would you write a short and interesting caption for an Instagram post?',
+    hindi: 'आप Instagram post के लिए एक छोटा और interesting caption कैसे लिखेंगे?',
+    active: true,
+  },
+  {
+    id: 'cw-6',
+    domain: 'Content Writing (CW)',
+    questionOrder: 6,
+    order: 6,
+    questionText: 'Written Assignment: Write a short, engaging post (3-5 sentences) or creative copy that encourages young people to learn new industry skills with GenZ Upskill Foundation.',
+    english: 'Written Assignment: Write a short, engaging post (3-5 sentences) or creative copy that encourages young people to learn new industry skills with GenZ Upskill Foundation.',
+    hindi: 'लिखित असाइनमेंट: एक छोटी, आकर्षक पोस्ट (3-5 वाक्य) या क्रिएटिव कॉपी लिखें जो युवाओं को GenZ Upskill Foundation के साथ नई स्किल्स सीखने के लिए प्रेरित करे।',
+    active: true,
+    isWrittenAnswer: true,
+  },
+];
+
 /**
- * FIXED 24 QUESTIONS CONFIGURATION
- * Exactly 6 questions per domain (4 domains = 24 questions).
+ * FIXED QUESTIONS CONFIGURATION
+ * Exactly 6 questions per domain (3 domains = 18 questions).
  */
-export const FIXED_INTERVIEW_QUESTIONS: Record<InternshipDomain, InterviewQuestion[]> = {
+export const FIXED_INTERVIEW_QUESTIONS: Record<string, InterviewQuestion[]> = {
   'Social Media Marketing (SMM)': [
     {
       id: 'smm-1',
@@ -80,131 +143,8 @@ export const FIXED_INTERVIEW_QUESTIONS: Record<InternshipDomain, InterviewQuesti
     },
   ],
 
-  'Content Writing': [
-    {
-      id: 'cw-1',
-      domain: 'Content Writing',
-      questionOrder: 1,
-      order: 1,
-      questionText: 'Please introduce yourself and tell us a little about yourself.',
-      english: 'Please introduce yourself and tell us a little about yourself.',
-      hindi: 'कृपया अपना परिचय दें और अपने बारे में थोड़ा बताएं।',
-      active: true,
-    },
-    {
-      id: 'cw-2',
-      domain: 'Content Writing',
-      questionOrder: 2,
-      order: 2,
-      questionText: 'Why are you interested in Content Writing?',
-      english: 'Why are you interested in Content Writing?',
-      hindi: 'आप Content Writing में रुचि क्यों रखते हैं?',
-      active: true,
-    },
-    {
-      id: 'cw-3',
-      domain: 'Content Writing',
-      questionOrder: 3,
-      order: 3,
-      questionText: 'What do you think makes a piece of content interesting to read?',
-      english: 'What do you think makes a piece of content interesting to read?',
-      hindi: 'आपके अनुसार किसी content को पढ़ने में interesting क्या बनाता है?',
-      active: true,
-    },
-    {
-      id: 'cw-4',
-      domain: 'Content Writing',
-      questionOrder: 4,
-      order: 4,
-      questionText: 'If you have to write a post for GenZ Upskill Foundation, what topic would you choose and why?',
-      english: 'If you have to write a post for GenZ Upskill Foundation, what topic would you choose and why?',
-      hindi: 'अगर आपको GenZ Upskill Foundation के लिए एक post लिखनी हो, तो आप कौन-सा topic चुनेंगे और क्यों?',
-      active: true,
-    },
-    {
-      id: 'cw-5',
-      domain: 'Content Writing',
-      questionOrder: 5,
-      order: 5,
-      questionText: 'How would you write a short and interesting caption for an Instagram post?',
-      english: 'How would you write a short and interesting caption for an Instagram post?',
-      hindi: 'आप Instagram post के लिए एक छोटा और interesting caption कैसे लिखेंगे?',
-      active: true,
-    },
-    {
-      id: 'cw-6',
-      domain: 'Content Writing',
-      questionOrder: 6,
-      order: 6,
-      questionText: 'Write one short line that encourages young people to learn new skills.',
-      english: 'Write one short line that encourages young people to learn new skills.',
-      hindi: 'एक ऐसी छोटी line लिखें जो युवाओं को नई skills सीखने के लिए motivate करे।',
-      active: true,
-    },
-  ],
-
-  'Human Resources (HR)': [
-    {
-      id: 'hr-1',
-      domain: 'Human Resources (HR)',
-      questionOrder: 1,
-      order: 1,
-      questionText: 'Please introduce yourself and tell us a little about yourself.',
-      english: 'Please introduce yourself and tell us a little about yourself.',
-      hindi: 'कृपया अपना परिचय दें और अपने बारे में थोड़ा बताएं।',
-      active: true,
-    },
-    {
-      id: 'hr-2',
-      domain: 'Human Resources (HR)',
-      questionOrder: 2,
-      order: 2,
-      questionText: 'Why are you interested in Human Resources?',
-      english: 'Why are you interested in Human Resources?',
-      hindi: 'आप Human Resources में रुचि क्यों रखते हैं?',
-      active: true,
-    },
-    {
-      id: 'hr-3',
-      domain: 'Human Resources (HR)',
-      questionOrder: 3,
-      order: 3,
-      questionText: 'What do you think is the most important quality of a good HR person?',
-      english: 'What do you think is the most important quality of a good HR person?',
-      hindi: 'आपके अनुसार एक अच्छे HR person की सबसे important quality क्या होनी चाहिए?',
-      active: true,
-    },
-    {
-      id: 'hr-4',
-      domain: 'Human Resources (HR)',
-      questionOrder: 4,
-      order: 4,
-      questionText: 'How would you communicate with a candidate who has questions about an internship?',
-      english: 'How would you communicate with a candidate who has questions about an internship?',
-      hindi: 'अगर किसी candidate को internship के बारे में questions हों, तो आप उससे कैसे communicate करेंगे?',
-      active: true,
-    },
-    {
-      id: 'hr-5',
-      domain: 'Human Resources (HR)',
-      questionOrder: 5,
-      order: 5,
-      questionText: 'What would you do if an intern is not completing their assigned task on time?',
-      english: 'What would you do if an intern is not completing their assigned task on time?',
-      hindi: 'अगर कोई intern अपना assigned task समय पर पूरा नहीं कर रहा हो, तो आप क्या करेंगे?',
-      active: true,
-    },
-    {
-      id: 'hr-6',
-      domain: 'Human Resources (HR)',
-      questionOrder: 6,
-      order: 6,
-      questionText: 'Why is communication important in an HR role?',
-      english: 'Why is communication important in an HR role?',
-      hindi: 'HR role में communication important क्यों है?',
-      active: true,
-    },
-  ],
+  'Content Writing (CW)': CONTENT_WRITING_QUESTIONS,
+  'Content Writing': CONTENT_WRITING_QUESTIONS,
 
   'AI': [
     {
@@ -273,32 +213,39 @@ export const FIXED_INTERVIEW_QUESTIONS: Record<InternshipDomain, InterviewQuesti
 /**
  * Returns active fixed questions for a given internship domain.
  */
-export function getQuestionsForDomain(domain: InternshipDomain): InterviewQuestion[] {
+export function getQuestionsForDomain(domain: string): InterviewQuestion[] {
   const domainQuestions = FIXED_INTERVIEW_QUESTIONS[domain];
   if (domainQuestions && domainQuestions.length > 0) {
     return domainQuestions;
   }
-  return FIXED_INTERVIEW_QUESTIONS['Human Resources (HR)'];
+  // Try normalizations
+  if (domain.toLowerCase().includes('content') || domain.toLowerCase().includes('cw')) {
+    return CONTENT_WRITING_QUESTIONS;
+  }
+  if (domain.toLowerCase().includes('ai') || domain.toLowerCase().includes('artificial')) {
+    return FIXED_INTERVIEW_QUESTIONS['AI'];
+  }
+  return FIXED_INTERVIEW_QUESTIONS['Social Media Marketing (SMM)'];
 }
 
 /**
  * DOMAIN SPECIFIC INTRODUCTIONS
  */
-export const DOMAIN_INTRODUCTIONS: Record<InternshipDomain, { english: string; hindi: string; title: string }> = {
+export const DOMAIN_INTRODUCTIONS: Record<string, { english: string; hindi: string; title: string }> = {
   'Social Media Marketing (SMM)': {
     title: 'Domain Introduction — Social Media Marketing',
     english: 'You have selected Social Media Marketing. In this interview, we will understand your interest in social media, creativity, content ideas, and basic understanding of social media marketing.',
     hindi: 'आपने Social Media Marketing चुना है। इस interview में हम social media में आपकी रुचि, creativity, content ideas और social media marketing की basic understanding को समझेंगे।',
   },
+  'Content Writing (CW)': {
+    title: 'Domain Introduction — Content Writing',
+    english: 'You have selected Content Writing. In this interview, we will understand your interest in writing, creativity, communication, and your ability to express ideas clearly. For the final question, you will write a short creative sample.',
+    hindi: 'आपने Content Writing चुना है। इस interview में हम writing में आपकी रुचि, creativity, communication और अपने ideas को clearly express करने की ability को समझेंगे। अंतिम प्रश्न के लिए, आप एक छोटा क्रिएटिव सैंपल लिखेंगे।',
+  },
   'Content Writing': {
     title: 'Domain Introduction — Content Writing',
-    english: 'You have selected Content Writing. In this interview, we will understand your interest in writing, creativity, communication, and your ability to express ideas clearly.',
-    hindi: 'आपने Content Writing चुना है। इस interview में हम writing में आपकी रुचि, creativity, communication और अपने ideas को clearly express करने की ability को समझेंगे।',
-  },
-  'Human Resources (HR)': {
-    title: 'Domain Introduction — Human Resources',
-    english: 'You have selected Human Resources. In this interview, we will understand your communication skills, people skills, responsibility, teamwork, and interest in working with candidates and interns.',
-    hindi: 'आपने Human Resources चुना है। इस interview में हम आपकी communication skills, people skills, responsibility, teamwork और candidates तथा interns के साथ काम करने में आपकी रुचि को समझेंगे।',
+    english: 'You have selected Content Writing. In this interview, we will understand your interest in writing, creativity, communication, and your ability to express ideas clearly. For the final question, you will write a short creative sample.',
+    hindi: 'आपने Content Writing चुना है। इस interview में हम writing में आपकी रुचि, creativity, communication और अपने ideas को clearly express करने की ability को समझेंगे। अंतिम प्रश्न के लिए, आप एक छोटा क्रिएटिव सैंपल लिखेंगे।',
   },
   'AI': {
     title: 'Domain Introduction — AI',
@@ -310,9 +257,17 @@ export const DOMAIN_INTRODUCTIONS: Record<InternshipDomain, { english: string; h
 /**
  * Builds the exact step-by-step introduction sequence for the candidate
  */
-export function getIntroStepsForDomain(domain: InternshipDomain): InterviewIntroStep[] {
-  const domainIntro = DOMAIN_INTRODUCTIONS[domain] || DOMAIN_INTRODUCTIONS['Human Resources (HR)'];
-  const isHR = domain === 'Human Resources (HR)';
+export function getIntroStepsForDomain(domain: string): InterviewIntroStep[] {
+  let domainIntro = DOMAIN_INTRODUCTIONS[domain];
+  if (!domainIntro) {
+    if (domain.toLowerCase().includes('content') || domain.toLowerCase().includes('cw')) {
+      domainIntro = DOMAIN_INTRODUCTIONS['Content Writing (CW)'];
+    } else if (domain.toLowerCase().includes('ai')) {
+      domainIntro = DOMAIN_INTRODUCTIONS['AI'];
+    } else {
+      domainIntro = DOMAIN_INTRODUCTIONS['Social Media Marketing (SMM)'];
+    }
+  }
 
   const steps: Omit<InterviewIntroStep, 'stepNumber' | 'totalSteps'>[] = [
     {
@@ -339,33 +294,13 @@ export function getIntroStepsForDomain(domain: InternshipDomain): InterviewIntro
       english: domainIntro.english,
       hindi: domainIntro.hindi,
     },
-  ];
-
-  if (isHR) {
-    steps.push({
-      id: 'intro-hr-special',
-      title: 'HR Interview Overview',
-      english: 'In this HR interview, we will focus on your communication, understanding of people, teamwork, responsibility, and how you would handle common situations involving candidates or interns. There are no trick questions. We simply want to understand how you think and communicate.',
-      hindi: 'इस HR interview में हम आपकी communication, लोगों को समझने की ability, teamwork, responsibility और candidates या interns से जुड़ी सामान्य situations को handle करने के तरीके को समझेंगे। इसमें कोई trick questions नहीं हैं। हम केवल यह समझना चाहते हैं कि आप कैसे सोचते और communicate करते हैं।',
-    });
-  }
-
-  // Final "Let's begin" step
-  if (isHR) {
-    steps.push({
-      id: 'intro-begin',
-      title: "Let's Begin Your HR Interview",
-      english: "Thank you. Let's begin your HR interview.",
-      hindi: 'धन्यवाद। अब आपका HR interview शुरू करते हैं।',
-    });
-  } else {
-    steps.push({
+    {
       id: 'intro-begin',
       title: "Let's Begin Your Interview",
       english: "Thank you. Let's begin your interview.",
       hindi: 'धन्यवाद। अब आपका interview शुरू करते हैं।',
-    });
-  }
+    },
+  ];
 
   const total = steps.length;
   return steps.map((s, index) => ({

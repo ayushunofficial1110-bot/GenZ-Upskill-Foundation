@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Lock, ShieldCheck, X, AlertCircle } from 'lucide-react';
+import { Lock, ShieldCheck, X, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
@@ -19,6 +19,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -29,11 +30,20 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     setIsLoading(true);
     setError(null);
 
+    const cleanUser = username.trim();
+    const cleanPass = password.trim();
+
+    if (!cleanUser || !cleanPass) {
+      setError('Please enter both username and password.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: cleanUser, password: cleanPass }),
       });
 
       const data = await res.json();
@@ -94,12 +104,20 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             </label>
             <div className="relative">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter admin password"
-                className="w-full border border-[#D8D0BA] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0] text-[#0A192F]"
+                className="w-full border border-[#D8D0BA] rounded-lg pl-4 pr-11 py-2.5 text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0] text-[#0A192F]"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4 text-slate-500" />}
+              </button>
             </div>
           </div>
 

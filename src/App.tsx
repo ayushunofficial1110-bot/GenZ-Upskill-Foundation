@@ -4,24 +4,25 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AppStep, CandidateFormData, InterviewQuestion, QuestionAnswerMetadata } from './types';
+import { AppStep, CandidateFormData, InterviewQuestion, QuestionAnswerMetadata, InternshipDomain } from './types';
 import { getQuestionsForDomain, DEFAULT_DOMAINS } from './lib/questions';
 import { InterviewMediaManager } from './lib/recorder';
-import { Navbar } from './components/Navbar';
-import { WelcomeHero } from './components/WelcomeHero';
 import { CandidateForm } from './components/CandidateForm';
+import { CountrySelect } from './components/CountrySelect';
+import { LegalModal, LegalDocType } from './components/LegalModal';
 import { ConsentScreen } from './components/ConsentScreen';
 import { DeviceCheck } from './components/DeviceCheck';
 import { InterviewRoom } from './components/InterviewRoom';
 import { CompletionScreen } from './components/CompletionScreen';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { AdminDashboard } from './components/AdminDashboard';
-import { ShieldCheck, Video, Mic, CheckCircle2, ArrowRight, Lock, UserCheck } from 'lucide-react';
+import { ShieldCheck, ArrowRight, Lock, AlertCircle, Phone, Mail, User, GraduationCap, Briefcase } from 'lucide-react';
 
 const INITIAL_FORM: CandidateFormData = {
   fullName: '',
   email: '',
   mobile: '',
+  countryCode: '+91',
   college: '',
   domain: 'Social Media Marketing (SMM)',
   agreedToConsent: false,
@@ -30,6 +31,10 @@ const INITIAL_FORM: CandidateFormData = {
 export default function App() {
   const [currentStep, setCurrentStep] = useState<AppStep>('welcome');
   const [candidateData, setCandidateData] = useState<CandidateFormData>(INITIAL_FORM);
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>('+91');
+  const [isDomainLocked, setIsDomainLocked] = useState<boolean>(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
   const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
   const [submittedInterviewId, setSubmittedInterviewId] = useState<string>('');
 
@@ -38,19 +43,121 @@ export default function App() {
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
 
+  // Legal Modal State (Privacy Policy / Terms of Service)
+  const [legalModalType, setLegalModalType] = useState<LegalDocType>(null);
+
   // Persistent media manager instance across steps
   const mediaManagerRef = useRef<InterviewMediaManager | null>(null);
   if (!mediaManagerRef.current) {
     mediaManagerRef.current = new InterviewMediaManager();
   }
 
-  // Load admin token from localStorage if available
+  // Load admin token from localStorage & parse domain param from URL on startup
   useEffect(() => {
     const token = localStorage.getItem('genz_admin_token');
     if (token) {
       setAdminToken(token);
     }
+
+    try {
+      // Check search params and hash query params
+      const searchStr = window.location.search || '';
+      const hashStr = window.location.hash.includes('?') ? window.location.hash.substring(window.location.hash.indexOf('?')) : '';
+      const combinedParams = new URLSearchParams(searchStr || hashStr);
+
+      const domainParam =
+        combinedParams.get('domain') ||
+        combinedParams.get('d') ||
+        combinedParams.get('track') ||
+        combinedParams.get('assigned_domain') ||
+        combinedParams.get('internship_domain');
+
+      if (domainParam) {
+        const dClean = decodeURIComponent(domainParam).toLowerCase().trim();
+        let matchedDomain: InternshipDomain | null = null;
+
+        if (
+          dClean === 'smm' ||
+          dClean.includes('social') ||
+          dClean.includes('marketing') ||
+          dClean === 'social-media-marketing' ||
+          dClean === 'social_media_marketing'
+        ) {
+          matchedDomain = 'Social Media Marketing (SMM)';
+        } else if (
+          dClean === 'cw' ||
+          dClean.includes('content') ||
+          dClean.includes('writing') ||
+          dClean === 'content-writing' ||
+          dClean === 'content_writing'
+        ) {
+          matchedDomain = 'Content Writing (CW)';
+        } else if (
+          dClean === 'ai' ||
+          dClean.includes('artificial') ||
+          dClean.includes('intelligence') ||
+          dClean.includes('machine-learning') ||
+          dClean === 'genai'
+        ) {
+          matchedDomain = 'AI';
+        }
+
+        if (matchedDomain) {
+          console.log(`[Domain-Lock] Pre-locked domain from URL parameter: "${domainParam}" -> "${matchedDomain}"`);
+          setCandidateData((prev) => ({ ...prev, domain: matchedDomain! }));
+          setIsDomainLocked(true);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not parse URL query parameters:', e);
+    }
   }, []);
+
+  const validateWelcomeForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!candidateData.fullName.trim()) {
+      errors.fullName = 'Full name is required.';
+    } else if (candidateData.fullName.trim().length < 2) {
+      errors.fullName = 'Please enter a valid full name.';
+    }
+
+    const emailTrimmed = candidateData.email.trim();
+    if (!emailTrimmed) {
+      errors.email = 'Email address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      errors.email = 'Please enter a valid email (e.g. name@university.edu).';
+    }
+
+    const digitsOnly = candidateData.mobile.replace(/\D/g, '');
+    if (!digitsOnly) {
+      errors.mobile = 'Mobile number is required.';
+    } else if (digitsOnly.length < 8 || digitsOnly.length > 15) {
+      errors.mobile = 'Enter a valid mobile number (8-15 digits).';
+    }
+
+    if (!candidateData.college.trim()) {
+      errors.college = 'College or University name is required.';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleWelcomeFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateWelcomeForm()) return;
+
+    const digitsOnly = candidateData.mobile.replace(/\D/g, '');
+    const fullMobile = `${selectedCountryCode} ${digitsOnly}`;
+    const preparedData: CandidateFormData = {
+      ...candidateData,
+      countryCode: selectedCountryCode,
+      mobile: fullMobile,
+    };
+
+    handleCandidateFormSubmit(preparedData);
+  };
 
   const handleCandidateFormSubmit = (data: CandidateFormData) => {
     setCandidateData(data);
@@ -113,7 +220,6 @@ export default function App() {
         throw new Error('Invalid recording duration detected.');
       }
 
-      // Client-side sanity check on recording size vs. duration
       const minAcceptableBytes = Math.min(30000, Math.max(4096, durationSeconds * 2000));
       if (actualSize < minAcceptableBytes && durationSeconds > 5) {
         console.warn(
@@ -141,7 +247,6 @@ export default function App() {
       );
       console.log(`[UPLOAD] POST URL=${targetUrl}`);
 
-      // Safe timeout on fetch (90 seconds)
       const abortController = new AbortController();
       const fetchTimeout = setTimeout(() => abortController.abort(), 90000);
 
@@ -158,8 +263,6 @@ export default function App() {
       console.log(
         `[UPLOAD] Response body received ${new Date().toISOString()} elapsed=${Date.now() - submitStartTime}ms`
       );
-      console.log(`[UPLOAD] HTTP status=${res.status}`);
-      console.log(`[UPLOAD] Response body=${responseText}`);
 
       let result: any = null;
       try {
@@ -195,7 +298,11 @@ export default function App() {
     if (mediaManagerRef.current) {
       mediaManagerRef.current.cleanup();
     }
-    setCandidateData(INITIAL_FORM);
+    setCandidateData({
+      ...INITIAL_FORM,
+      domain: isDomainLocked ? candidateData.domain : INITIAL_FORM.domain,
+    });
+    setFormErrors({});
     setCurrentStep('welcome');
   };
 
@@ -314,115 +421,197 @@ export default function App() {
 
               {/* Right Column: Registration Form with Warm Cream Card Styling */}
               <div className="w-full md:w-3/5 p-8 sm:p-10 flex flex-col justify-center bg-[#FFFDF9]">
-                <h3 className="text-lg sm:text-xl font-bold mb-6 text-[#0A192F] border-l-4 border-[#1B4D36] pl-3.5">
-                  Candidate Registration
-                </h3>
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-lg sm:text-xl font-bold text-[#0A192F] border-l-4 border-[#1B4D36] pl-3.5">
+                    Candidate Registration
+                  </h3>
+                  {isDomainLocked && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#1B4D36] bg-[#EAF3EE] px-2.5 py-1 rounded-md border border-[#2E7D56]/30">
+                      <Lock className="w-3 h-3" />
+                      Domain Locked via Invitation
+                    </span>
+                  )}
+                </div>
 
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!candidateData.fullName.trim()) {
-                      alert('Please enter your full name');
-                      return;
-                    }
-                    if (!candidateData.email.trim()) {
-                      alert('Please enter your email address');
-                      return;
-                    }
-                    if (!candidateData.mobile.trim()) {
-                      alert('Please enter your mobile number');
-                      return;
-                    }
-                    handleCandidateFormSubmit(candidateData);
-                  }}
-                  className="space-y-4"
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1">
-                        Full Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={candidateData.fullName}
-                        onChange={(e) =>
-                          setCandidateData({ ...candidateData, fullName: e.target.value })
-                        }
-                        placeholder="e.g. John Doe"
-                        className="w-full border border-[#D8D0BA] rounded-lg px-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1">
-                        Email Address <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={candidateData.email}
-                        onChange={(e) =>
-                          setCandidateData({ ...candidateData, email: e.target.value })
-                        }
-                        placeholder="e.g. john@university.edu"
-                        className="w-full border border-[#D8D0BA] rounded-lg px-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F]"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1">
-                        Mobile Number <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        value={candidateData.mobile}
-                        onChange={(e) =>
-                          setCandidateData({ ...candidateData, mobile: e.target.value })
-                        }
-                        placeholder="e.g. +91 98765 43210"
-                        className="w-full border border-[#D8D0BA] rounded-lg px-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1">
-                        College / University <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={candidateData.college}
-                        onChange={(e) =>
-                          setCandidateData({ ...candidateData, college: e.target.value })
-                        }
-                        placeholder="e.g. Institute of Technology"
-                        className="w-full border border-[#D8D0BA] rounded-lg px-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F]"
-                      />
-                    </div>
-                  </div>
-
+                <form onSubmit={handleWelcomeFormSubmit} className="space-y-4">
+                  {/* Full Name */}
                   <div>
-                    <label className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1">
-                      Internship Domain <span className="text-red-500">*</span>
+                    <label htmlFor="reg-fullname" className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1">
+                      Full Name <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={candidateData.domain}
-                      onChange={(e) =>
-                        setCandidateData({
-                          ...candidateData,
-                          domain: e.target.value as CandidateFormData['domain'],
-                        })
-                      }
-                      className="w-full border border-[#D8D0BA] rounded-lg px-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F] cursor-pointer"
-                    >
-                      {DEFAULT_DOMAINS.map((domain) => (
-                        <option key={domain} value={domain}>
-                          {domain}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <input
+                        id="reg-fullname"
+                        type="text"
+                        value={candidateData.fullName}
+                        onChange={(e) => {
+                          setCandidateData({ ...candidateData, fullName: e.target.value });
+                          if (formErrors.fullName) setFormErrors((prev) => ({ ...prev, fullName: '' }));
+                        }}
+                        placeholder="e.g. Priya Sharma"
+                        className={`w-full border rounded-lg pl-9 pr-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F] ${
+                          formErrors.fullName ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
+                        }`}
+                      />
+                    </div>
+                    {formErrors.fullName && (
+                      <p className="text-red-600 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3" />
+                        {formErrors.fullName}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Email Address */}
+                  <div>
+                    <label htmlFor="reg-email" className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1">
+                      Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <input
+                        id="reg-email"
+                        type="email"
+                        value={candidateData.email}
+                        onChange={(e) => {
+                          setCandidateData({ ...candidateData, email: e.target.value });
+                          if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: '' }));
+                        }}
+                        placeholder="e.g. priya.sharma@example.com"
+                        className={`w-full border rounded-lg pl-9 pr-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F] ${
+                          formErrors.email ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
+                        }`}
+                      />
+                    </div>
+                    {formErrors.email && (
+                      <p className="text-red-600 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3" />
+                        {formErrors.email}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Mobile Number with Country Code Dropdown */}
+                  <div>
+                    <label htmlFor="reg-mobile" className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1">
+                      Mobile Number (Digits Only) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="w-28 sm:w-32 shrink-0">
+                        <CountrySelect
+                          value={selectedCountryCode}
+                          onChange={(dialCode) => setSelectedCountryCode(dialCode)}
+                        />
+                      </div>
+
+                      <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                          <Phone className="w-4 h-4" />
+                        </div>
+                        <input
+                          id="reg-mobile"
+                          type="tel"
+                          inputMode="numeric"
+                          value={candidateData.mobile}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 15);
+                            setCandidateData({ ...candidateData, mobile: digitsOnly });
+                            if (formErrors.mobile) setFormErrors((prev) => ({ ...prev, mobile: '' }));
+                          }}
+                          placeholder="9876543210"
+                          className={`w-full border rounded-lg pl-9 pr-3.5 py-2.5 text-xs sm:text-sm font-mono focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F] ${
+                            formErrors.mobile ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                    {formErrors.mobile && (
+                      <p className="text-red-600 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3" />
+                        {formErrors.mobile}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* College / University */}
+                  <div>
+                    <label htmlFor="reg-college" className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-1">
+                      College / University <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <GraduationCap className="w-4 h-4" />
+                      </div>
+                      <input
+                        id="reg-college"
+                        type="text"
+                        value={candidateData.college}
+                        onChange={(e) => {
+                          setCandidateData({ ...candidateData, college: e.target.value });
+                          if (formErrors.college) setFormErrors((prev) => ({ ...prev, college: '' }));
+                        }}
+                        placeholder="e.g. National Institute of Technology"
+                        className={`w-full border rounded-lg pl-9 pr-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F] ${
+                          formErrors.college ? 'border-red-400 bg-red-50/20' : 'border-[#D8D0BA]'
+                        }`}
+                      />
+                    </div>
+                    {formErrors.college && (
+                      <p className="text-red-600 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3" />
+                        {formErrors.college}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Internship Domain */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label htmlFor="reg-domain" className="block text-[10px] font-bold text-[#0A192F] uppercase tracking-wider">
+                        Internship Domain <span className="text-red-500">*</span>
+                      </label>
+                      {isDomainLocked && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#1B4D36] bg-[#EAF3EE] px-2 py-0.5 rounded border border-[#2E7D56]/30">
+                          <Lock className="w-3 h-3 text-[#1B4D36]" />
+                          Locked via Invitation Link
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Briefcase className="w-4 h-4" />
+                      </div>
+                      {isDomainLocked ? (
+                        <div className="w-full border border-[#D4AF37]/50 rounded-lg pl-9 pr-8 py-2.5 text-xs sm:text-sm font-semibold bg-[#FAF7F0] text-[#0A192F] flex items-center justify-between shadow-xs">
+                          <span>{candidateData.domain}</span>
+                          <Lock className="w-3.5 h-3.5 text-[#1B4D36]" />
+                        </div>
+                      ) : (
+                        <select
+                          id="reg-domain"
+                          value={candidateData.domain}
+                          onChange={(e) =>
+                            setCandidateData({
+                              ...candidateData,
+                              domain: e.target.value as CandidateFormData['domain'],
+                            })
+                          }
+                          className="w-full border border-[#D8D0BA] rounded-lg pl-9 pr-8 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#1B4D36] focus:outline-none bg-[#FAF7F0]/60 text-[#0A192F] cursor-pointer"
+                        >
+                          {DEFAULT_DOMAINS.map((domain) => (
+                            <option key={domain} value={domain}>
+                              {domain}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
 
                   <div className="bg-[#EAF3EE]/80 p-3.5 rounded-lg border border-[#2E7D56]/30 mt-2">
@@ -455,6 +644,7 @@ export default function App() {
         {currentStep === 'form' && (
           <CandidateForm
             initialData={candidateData}
+            isDomainLocked={isDomainLocked}
             onSubmit={handleCandidateFormSubmit}
             onBack={() => setCurrentStep('welcome')}
           />
@@ -498,11 +688,44 @@ export default function App() {
       <footer className="bg-[#0A192F] border-t border-[#D4AF37]/30 text-slate-300 py-4 px-4 sm:px-12 flex flex-col sm:flex-row justify-between items-center text-[10px] font-medium uppercase tracking-widest gap-2">
         <div className="text-slate-300">&copy; 2026 GenZ Upskill Foundation. All Rights Reserved.</div>
         <div className="flex gap-6 text-[#D4AF37]">
-          <span className="hover:text-white transition-colors cursor-pointer">Privacy Policy</span>
-          <span className="hover:text-white transition-colors cursor-pointer">Terms of Service</span>
-          <span className="hover:text-white transition-colors cursor-pointer">HR Evaluation Desk</span>
+          <button
+            type="button"
+            id="footer-link-privacy"
+            onClick={() => setLegalModalType('privacy')}
+            className="hover:text-white transition-colors cursor-pointer bg-transparent border-0 p-0 text-[10px] uppercase font-semibold text-[#D4AF37]"
+          >
+            Privacy Policy
+          </button>
+          <button
+            type="button"
+            id="footer-link-terms"
+            onClick={() => setLegalModalType('terms')}
+            className="hover:text-white transition-colors cursor-pointer bg-transparent border-0 p-0 text-[10px] uppercase font-semibold text-[#D4AF37]"
+          >
+            Terms of Service
+          </button>
+          <button
+            type="button"
+            id="footer-link-hr-desk"
+            onClick={() => {
+              if (adminToken) {
+                setIsAdminDashboardOpen(true);
+              } else {
+                setIsAdminModalOpen(true);
+              }
+            }}
+            className="hover:text-white transition-colors cursor-pointer bg-transparent border-0 p-0 text-[10px] uppercase font-semibold text-[#D4AF37]"
+          >
+            HR Evaluation Desk
+          </button>
         </div>
       </footer>
+
+      {/* Legal & Policy Modals (Privacy Policy / Terms of Service) */}
+      <LegalModal
+        type={legalModalType}
+        onClose={() => setLegalModalType(null)}
+      />
 
       {/* Admin Login Modal */}
       <AdminLoginModal

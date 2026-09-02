@@ -227,8 +227,9 @@ class DatabaseService {
     data: {
       recordingPath?: string;
       recordingSize?: number;
-      driveFileId: string;
-      driveViewLink: string;
+      videoUrl?: string;
+      driveFileId?: string;
+      driveViewLink?: string;
       driveDownloadLink?: string;
     },
     options?: { reqStartTime?: number }
@@ -240,13 +241,14 @@ class DatabaseService {
     interview.driveFileId = data.driveFileId;
     interview.driveViewLink = data.driveViewLink;
     if (data.driveDownloadLink) interview.driveDownloadLink = data.driveDownloadLink;
+    interview.videoUrl = data.videoUrl || data.driveViewLink;
     if (data.recordingPath) interview.recordingPath = data.recordingPath;
     if (data.recordingSize) interview.recordingSize = data.recordingSize;
     interview.syncedToGoogleSheet = true;
 
     this.saveData(this.data);
 
-    // Sync completed interview & Google Drive links to Google Sheets
+    // Sync completed interview & video storage links to Google Sheets
     try {
       await googleSheetsService.syncCandidateInterview(interview, undefined, options);
     } catch (err) {
@@ -450,6 +452,23 @@ class DatabaseService {
       pendingReviews,
       shortlistedCount,
     };
+  }
+
+  public async deleteInterview(id: string): Promise<boolean> {
+    const initialCount = this.data.interviews.length;
+    const interviewToDelete = this.data.interviews.find((i) => i.id === id);
+    if (!interviewToDelete) return false;
+
+    this.data.interviews = this.data.interviews.filter((i) => i.id !== id);
+
+    // Also clean up candidate if candidate has no other interviews
+    const otherInterviews = this.data.interviews.filter((i) => i.candidateId === interviewToDelete.candidateId);
+    if (otherInterviews.length === 0) {
+      this.data.candidates = this.data.candidates.filter((c) => c.id !== interviewToDelete.candidateId);
+    }
+
+    this.saveData(this.data);
+    return this.data.interviews.length < initialCount;
   }
 
   public async getQuestions(domain?: string): Promise<InterviewQuestion[]> {

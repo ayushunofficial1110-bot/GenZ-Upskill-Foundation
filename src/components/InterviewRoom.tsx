@@ -26,6 +26,8 @@ import {
   BookOpen,
   Loader2,
   AlertCircle,
+  AlertTriangle,
+  PenTool,
 } from 'lucide-react';
 
 interface InterviewRoomProps {
@@ -60,6 +62,14 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
   const [isHardwareDeactivated, setIsHardwareDeactivated] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
 
+  // Written answer state for written questions (e.g. Content Writing Q6)
+  const [writtenAnswer, setWrittenAnswer] = useState<string>('');
+  const [writtenAnswerError, setWrittenAnswerError] = useState<string | null>(null);
+
+  // Camera cover / occlusion warning
+  const [cameraWarning, setCameraWarning] = useState<boolean>(false);
+  const consecutiveDarkFramesRef = useRef<number>(0);
+
   // Time stamps for each question
   const questionStartTimeRef = useRef<number>(0);
   const answersLogRef = useRef<QuestionAnswerMetadata[]>([]);
@@ -76,6 +86,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
 
   const currentQuestion = questions[currentQuestionIndex] || questions[0];
   const isLastQuestion = currentQuestionIndex === questions.length - 1;
+  const isWrittenQuestion = Boolean(currentQuestion?.isWrittenAnswer);
 
   // Format seconds to mm:ss
   const formatTime = (totalSec: number) => {
@@ -125,8 +136,54 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
       }, 700);
     }
 
+    // Camera coverage / low visibility monitor using offscreen canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 48;
+    canvas.height = 36;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const cameraMonitorInterval = setInterval(() => {
+      if (!videoRef.current || videoRef.current.readyState < 2 || isHardwareDeactivated) return;
+      try {
+        if (ctx) {
+          ctx.drawImage(videoRef.current, 0, 0, 48, 36);
+          const frame = ctx.getImageData(0, 0, 48, 36);
+          const data = frame.data;
+          let totalLuminance = 0;
+          const pixelCount = data.length / 4;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            // Standard perceptual luminance
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            totalLuminance += lum;
+          }
+
+          const avgLuminance = totalLuminance / pixelCount;
+
+          // Check for pitch black / covered camera (< 14 luminance)
+          if (avgLuminance < 14) {
+            consecutiveDarkFramesRef.current += 1;
+          } else {
+            consecutiveDarkFramesRef.current = 0;
+          }
+
+          if (consecutiveDarkFramesRef.current >= 3) {
+            setCameraWarning(true);
+          } else {
+            setCameraWarning(false);
+          }
+        }
+      } catch (err) {
+        // Ignore canvas read errors if any
+      }
+    }, 1200);
+
     return () => {
       clearInterval(micInterval);
+      clearInterval(cameraMonitorInterval);
       speechEngine.stop();
     };
   }, []);
@@ -180,6 +237,15 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
 
   // Advance to next question (Question 1 to 6)
   const handleNextQuestion = () => {
+    // If current question is written, validate that candidate typed something meaningful
+    if (isWrittenQuestion) {
+      if (!writtenAnswer.trim() || writtenAnswer.trim().length < 15) {
+        setWrittenAnswerError('Please write at least 2-3 sentences before completing your submission.');
+        return;
+      }
+      setWrittenAnswerError(null);
+    }
+
     speechEngine.stop();
 
     // Record answer metadata for current question
@@ -187,14 +253,17 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
     const completedAt = durationSeconds;
     const duration = Math.max(1, completedAt - startedAt);
 
-    answersLogRef.current.push({
+    const answerMeta: QuestionAnswerMetadata = {
       questionId: currentQuestion.id,
       questionText: currentQuestion.english || currentQuestion.questionText,
       questionOrder: currentQuestionIndex + 1,
       startedAtSeconds: startedAt,
       completedAtSeconds: completedAt,
       durationSeconds: duration,
-    });
+      ...(isWrittenQuestion && writtenAnswer.trim() ? { writtenAnswer: writtenAnswer.trim() } : {}),
+    };
+
+    answersLogRef.current.push(answerMeta);
 
     if (isLastQuestion) {
       handleSubmitInterview();
@@ -405,7 +474,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
               {/* Question Progress Header */}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-black uppercase tracking-wider text-[#1B4D36] bg-[#EAF3EE] px-3.5 py-1.5 rounded-full border border-[#2E7D56]/30">
-                  Question {currentQuestionIndex + 1} of 6
+                  Question {currentQuestionIndex + 1} of 6 {isWrittenQuestion ? '• Written Task' : ''}
                 </span>
 
                 {/* Speech State */}
@@ -414,6 +483,11 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                     <span className="flex items-center gap-1.5 text-xs font-bold text-[#0A192F] bg-[#FAF7F0] border border-[#D4AF37] px-3 py-1 rounded-full animate-pulse shadow-xs">
                       <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
                       Interviewer Speaking Question...
+                    </span>
+                  ) : isWrittenQuestion ? (
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-[#1B4D36] bg-[#EAF3EE] border border-[#2E7D56]/30 px-3 py-1 rounded-full">
+                      <PenTool className="w-3.5 h-3.5 text-[#1B4D36]" />
+                      Written Assignment
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5 text-xs font-semibold text-[#0A192F] bg-[#FAF7F0] border border-[#E5DEC9] px-3 py-1 rounded-full">
@@ -427,7 +501,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
               {/* English Question (Prominent + Spoken by TTS) */}
               <div className="space-y-1.5 border-l-4 border-[#1B4D36] pl-4">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#D4AF37]">
-                  English Question (Spoken via TTS)
+                  {isWrittenQuestion ? 'Written Task Prompt' : 'English Question (Spoken via Voice)'}
                 </span>
                 <h2 className="text-xl sm:text-2xl font-bold text-[#0A192F] leading-snug tracking-tight">
                   "{currentQuestion.english || currentQuestion.questionText}"
@@ -445,12 +519,50 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                 </p>
               </div>
 
-              {/* Candidate Answering Instruction */}
-              <div className="p-3 rounded-lg bg-[#EAF3EE] border border-[#2E7D56]/30 text-xs text-[#0A192F] flex items-center justify-between">
-                <span>
-                  💡 <strong>Accepted Languages:</strong> You may answer in <strong>English, Hindi, or Hinglish</strong>.
-                </span>
-              </div>
+              {/* Written Assignment Input Box for Content Writing Q6 */}
+              {isWrittenQuestion ? (
+                <div className="p-4 rounded-xl bg-amber-50/50 border-2 border-[#1B4D36]/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="written-answer-box" className="block text-xs font-bold text-[#0A192F] uppercase tracking-wide flex items-center gap-1.5">
+                      <PenTool className="w-4 h-4 text-[#1B4D36]" />
+                      <span>Your Written Response (Type Below)</span>
+                    </label>
+                    <span className="text-[11px] font-bold text-[#1B4D36]">
+                      {writtenAnswer.trim().split(/\s+/).filter(Boolean).length} words • {writtenAnswer.length} chars
+                    </span>
+                  </div>
+
+                  <textarea
+                    id="written-answer-box"
+                    rows={5}
+                    value={writtenAnswer}
+                    onChange={(e) => {
+                      setWrittenAnswer(e.target.value);
+                      if (writtenAnswerError) setWrittenAnswerError(null);
+                    }}
+                    placeholder="Write your creative copy or social media post here (aim for 3-5 engaging sentences)..."
+                    className="w-full p-3.5 text-sm bg-white border border-[#D8D0BA] rounded-xl text-[#0A192F] focus:ring-2 focus:ring-[#1B4D36] focus:outline-none leading-relaxed placeholder:text-slate-400"
+                  />
+
+                  {writtenAnswerError && (
+                    <p className="text-xs text-red-600 font-bold flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {writtenAnswerError}
+                    </p>
+                  )}
+
+                  <p className="text-[11px] text-slate-600 italic">
+                    💡 Tip: Focus on clarity, tone, and inspiring action among students and young professionals.
+                  </p>
+                </div>
+              ) : (
+                /* Candidate Answering Instruction for Spoken Questions */
+                <div className="p-3 rounded-lg bg-[#EAF3EE] border border-[#2E7D56]/30 text-xs text-[#0A192F] flex items-center justify-between">
+                  <span>
+                    💡 <strong>Accepted Languages:</strong> You may answer in <strong>English, Hindi, or Hinglish</strong>.
+                  </span>
+                </div>
+              )}
 
               {/* Voice Helper Tools */}
               <div className="pt-3 border-t border-[#E5DEC9] flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -490,7 +602,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
 
                 <div className="flex items-center gap-1 text-slate-500 text-[11px]">
                   <HelpCircle className="w-3.5 h-3.5 text-[#1B4D36]" />
-                  <span>Answer clearly into your microphone</span>
+                  <span>{isWrittenQuestion ? 'Type your answer and click submit' : 'Answer clearly into your microphone'}</span>
                 </div>
               </div>
             </div>
@@ -624,6 +736,19 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                 <div>
                   <p className="text-white font-bold text-sm">Camera & Microphone Deactivated</p>
                   <p className="text-slate-300 text-xs mt-1">Recording complete. Securely uploading to Google Drive & HR records...</p>
+                </div>
+              </div>
+            )}
+
+            {/* Camera Cover / Low Visibility Warning Banner */}
+            {cameraWarning && !isHardwareDeactivated && (
+              <div className="absolute top-12 left-3 right-3 bg-amber-950/90 text-amber-200 border border-amber-500/80 p-2.5 rounded-xl shadow-lg backdrop-blur-sm flex items-start gap-2 text-xs z-30 animate-pulse">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block text-amber-300">Camera Visibility Warning</span>
+                  <span className="text-[11px] leading-tight text-amber-100">
+                    Camera appears covered or lighting is very low. Please ensure your face is clearly visible.
+                  </span>
                 </div>
               </div>
             )}

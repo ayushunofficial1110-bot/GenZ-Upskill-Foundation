@@ -12,23 +12,23 @@ import {
   CheckCircle2,
   Clock,
   Search,
-  Filter,
   LogOut,
   RefreshCw,
-  Play,
   UserCheck,
-  Building,
-  GraduationCap,
   Mail,
   Phone,
-  Calendar,
+  GraduationCap,
   X,
-  FileText,
   Save,
   ExternalLink,
   RotateCcw,
   AlertCircle,
   AlertTriangle,
+  Trash2,
+  Copy,
+  Check,
+  PenTool,
+  Link as LinkIcon,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -62,6 +62,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [reviewNotes, setReviewNotes] = useState('');
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Deletion Modal / State
+  const [interviewToDelete, setInterviewToDelete] = useState<InterviewRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
+
+  // Copy link feedback state & base URL
+  const [copiedDomain, setCopiedDomain] = useState<string | null>(null);
+  const [baseUrl, setBaseUrl] = useState<string>('');
+  const [isRefreshingStream, setIsRefreshingStream] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setBaseUrl(window.location.origin);
+    }
+  }, []);
+
+  const handleRefreshVideoUrl = async (interviewId?: string) => {
+    const targetId = interviewId || selectedInterview?.id;
+    if (!targetId) return;
+
+    setIsRefreshingStream(true);
+    try {
+      const res = await fetch(`/api/admin/interviews/${targetId}/presigned-url`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.streamUrl) {
+          setStreamUrl(data.streamUrl);
+          setSelectedInterview((prev) =>
+            prev && prev.id === targetId
+              ? { ...prev, videoUrl: data.streamUrl, driveViewLink: data.streamUrl }
+              : prev
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Failed to refresh presigned video URL:', err);
+    } finally {
+      setIsRefreshingStream(false);
+    }
+  };
+
+  const copyDomainLink = (domainKey: string) => {
+    const origin = baseUrl || window.location.origin;
+    const url = `${origin}/?domain=${domainKey}`;
+    navigator.clipboard.writeText(url);
+    setCopiedDomain(domainKey);
+    setTimeout(() => {
+      setCopiedDomain(null);
+    }, 2500);
+  };
 
   const handleRetryProcessing = async (interviewId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -113,6 +166,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       });
     } finally {
       setRetryingIds((prev) => ({ ...prev, [interviewId]: false }));
+    }
+  };
+
+  const handleDeleteInterview = async () => {
+    if (!interviewToDelete) return;
+    setIsDeleting(true);
+
+    try {
+      const res = await fetch(`/api/admin/interviews/${interviewToDelete.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDeleteNotice(`Successfully deleted interview for ${interviewToDelete.candidateName}.`);
+        setInterviews((prev) => prev.filter((i) => i.id !== interviewToDelete.id));
+        if (selectedInterview?.id === interviewToDelete.id) {
+          setSelectedInterview(null);
+          setStreamUrl(null);
+        }
+        fetchDashboardData();
+      } else {
+        alert(data.error || 'Failed to delete interview.');
+      }
+    } catch (e: unknown) {
+      alert((e as Error).message || 'Error deleting interview.');
+    } finally {
+      setIsDeleting(false);
+      setInterviewToDelete(null);
     }
   };
 
@@ -199,6 +282,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setInterviews((prev) =>
           prev.map((item) => (item.id === data.interview.id ? data.interview : item))
         );
+        fetchDashboardData();
       }
     } catch (e) {
       console.error('Failed to save review:', e);
@@ -272,6 +356,121 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
+        {/* Domain-Locked Registration Links Card (3 Distinct Rows for HR) */}
+        <div className="max-w-7xl mx-auto bg-[#FFFDF9] border border-[#D8D0BA] rounded-2xl p-5 sm:p-6 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#E5DEC9] gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-[#0A192F] flex items-center gap-2">
+                <LinkIcon className="w-4 h-4 text-[#1B4D36]" />
+                <span>Domain-Locked Candidate Registration Links</span>
+              </h3>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Share these specialized URLs with candidates. The registration portal will pre-select and lock their interview domain.
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold text-[#1B4D36] bg-[#EAF3EE] px-2.5 py-1 rounded-full border border-[#2E7D56]/30 self-start sm:self-auto">
+              3 Active Domains
+            </span>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {[
+              {
+                key: 'smm',
+                name: 'Social Media Marketing',
+                badge: 'SMM',
+                badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+              },
+              {
+                key: 'cw',
+                name: 'Content Writing',
+                badge: 'CW',
+                badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
+              },
+              {
+                key: 'ai',
+                name: 'AI (Artificial Intelligence)',
+                badge: 'AI',
+                badgeColor: 'bg-blue-100 text-blue-800 border-blue-300',
+              },
+            ].map((domain) => {
+              const origin = baseUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+              const fullUrl = `${origin}/?domain=${domain.key}`;
+              const isCopied = copiedDomain === domain.key;
+
+              return (
+                <div
+                  key={domain.key}
+                  className="flex flex-col md:flex-row md:items-center justify-between p-3 sm:p-3.5 bg-[#FAF7F0] border border-[#E5DEC9] rounded-xl hover:border-[#1B4D36]/40 transition-colors gap-3"
+                >
+                  <div className="flex items-center gap-2.5 md:w-64 shrink-0">
+                    <span
+                      className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border uppercase tracking-wider ${domain.badgeColor}`}
+                    >
+                      {domain.badge}
+                    </span>
+                    <span className="text-xs font-bold text-[#0A192F]">{domain.name}</span>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center bg-white border border-[#D8D0BA] rounded-lg px-3 py-1.5 text-xs text-slate-700 font-mono select-all overflow-x-auto whitespace-nowrap shadow-inner">
+                      <span className="text-slate-400 select-none mr-1.5">URL:</span>
+                      <span className="text-[#0A192F] font-medium">{fullUrl}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                    <button
+                      type="button"
+                      onClick={() => copyDomainLink(domain.key)}
+                      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border shadow-xs ${
+                        isCopied
+                          ? 'bg-emerald-600 text-white border-emerald-700 ring-2 ring-emerald-400/40'
+                          : 'bg-[#1B4D36] hover:bg-[#153e2b] text-white border-[#153e2b]'
+                      }`}
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Link</span>
+                        </>
+                      )}
+                    </button>
+
+                    <a
+                      href={fullUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 text-slate-500 hover:text-[#0A192F] hover:bg-white rounded-lg border border-transparent hover:border-[#D8D0BA] transition-colors"
+                      title={`Open ${domain.name} registration link in new tab`}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Global Delete / Notification Banner */}
+        {deleteNotice && (
+          <div className="max-w-7xl mx-auto p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{deleteNotice}</span>
+            </div>
+            <button onClick={() => setDeleteNotice(null)} className="text-slate-400 hover:text-slate-600">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* KPI Stats Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-7xl mx-auto">
           <div className="bg-[#FFFDF9] p-4 rounded-xl border border-[#E5DEC9] shadow-xs flex items-center gap-3">
@@ -377,7 +576,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         isSelected ? 'bg-[#EAF3EE] border-l-4 border-[#1B4D36]' : 'hover:bg-[#FAF7F0]'
                       }`}
                     >
-                      <div className="space-y-1 min-w-0">
+                      <div className="space-y-1 min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-sm text-[#0A192F] truncate">
                             {item.candidateName}
@@ -420,17 +619,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         )}
                       </div>
 
-                      <div className="text-right shrink-0">
-                        <span className="text-[11px] text-slate-500 block">
-                          {new Date(item.createdAt).toLocaleDateString()}
-                        </span>
-                        {item.recordingDurationSeconds ? (
-                          <span className="text-[11px] font-bold text-[#1B4D36]">
-                            {Math.floor(item.recordingDurationSeconds / 60)}m {item.recordingDurationSeconds % 60}s
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right">
+                          <span className="text-[11px] text-slate-500 block">
+                            {new Date(item.createdAt).toLocaleDateString()}
                           </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-400">In progress</span>
-                        )}
+                          {item.recordingDurationSeconds ? (
+                            <span className="text-[11px] font-bold text-[#1B4D36]">
+                              {Math.floor(item.recordingDurationSeconds / 60)}m {item.recordingDurationSeconds % 60}s
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">In progress</span>
+                          )}
+                        </div>
+
+                        {/* Direct row delete button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInterviewToDelete(item);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete Interview"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   );
@@ -443,17 +657,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="lg:col-span-5 bg-[#FFFDF9] rounded-2xl border border-[#E5DEC9] shadow-sm p-6 space-y-6">
             {selectedInterview ? (
               <>
-                <div className="border-b border-[#E5DEC9] pb-4">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-mono text-xs font-bold text-[#0A192F] bg-[#FAF7F0] border border-[#D8D0BA] px-2 py-0.5 rounded">
-                      {selectedInterview.id}
-                    </span>
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${getStatusBadge(selectedInterview.hrReviewStatus)}`}>
-                      {selectedInterview.hrReviewStatus.replace('_', ' ')}
-                    </span>
+                <div className="border-b border-[#E5DEC9] pb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono text-xs font-bold text-[#0A192F] bg-[#FAF7F0] border border-[#D8D0BA] px-2 py-0.5 rounded">
+                        {selectedInterview.id}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${getStatusBadge(selectedInterview.hrReviewStatus)}`}>
+                        {selectedInterview.hrReviewStatus.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-bold text-[#0A192F]">{selectedInterview.candidateName}</h3>
+                    <p className="text-xs text-[#1B4D36] font-bold">{selectedInterview.domain} Specialization</p>
                   </div>
-                  <h3 className="text-xl font-bold text-[#0A192F]">{selectedInterview.candidateName}</h3>
-                  <p className="text-xs text-[#1B4D36] font-bold">{selectedInterview.domain} Specialization</p>
+
+                  {/* Delete button */}
+                  <button
+                    type="button"
+                    onClick={() => setInterviewToDelete(selectedInterview)}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-200 transition-colors cursor-pointer"
+                    title="Delete Interview Record"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
 
                 {/* Retry Status / Notice Alert Banner */}
@@ -497,14 +723,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 {/* Video Playback Section */}
                 <div>
-                  <h4 className="text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Video className="w-3.5 h-3.5 text-[#1B4D36]" />
-                    <span>Interview Video Recording</span>
-                  </h4>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-[10px] font-bold text-[#0A192F] uppercase tracking-wider flex items-center gap-1.5">
+                      <Video className="w-3.5 h-3.5 text-[#1B4D36]" />
+                      <span>Interview Video Recording</span>
+                    </h4>
+                    {streamUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleRefreshVideoUrl(selectedInterview.id)}
+                        disabled={isRefreshingStream}
+                        className="text-[10px] text-[#1B4D36] hover:text-[#0A192F] flex items-center gap-1 font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                        title="Generate a fresh 1-hour presigned playback URL"
+                      >
+                        <RefreshCw className={`w-2.5 h-2.5 ${isRefreshingStream ? 'animate-spin' : ''}`} />
+                        <span>{isRefreshingStream ? 'Refreshing...' : 'Refresh URL'}</span>
+                      </button>
+                    )}
+                  </div>
 
                   {streamUrl ? (
-                    <div className="rounded-xl overflow-hidden bg-slate-950 border border-[#E5DEC9] aspect-video flex items-center justify-center">
+                    <div className="rounded-xl overflow-hidden bg-slate-950 border border-[#E5DEC9] aspect-video flex items-center justify-center relative group">
                       <video
+                        key={streamUrl}
                         src={streamUrl}
                         controls
                         className="w-full h-full object-contain"
@@ -567,21 +808,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   )}
 
-                  {selectedInterview.driveViewLink && (
+                  {(streamUrl || selectedInterview.driveFileId || selectedInterview.driveViewLink) && (
                     <div className="mt-2 flex items-center justify-between p-2.5 rounded-lg bg-[#FAF7F0] border border-[#E5DEC9]">
-                      <span className="text-[11px] text-[#0A192F] font-medium flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        Stored on Google Drive
-                      </span>
-                      <a
-                        href={selectedInterview.driveViewLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1B4D36] hover:underline"
-                      >
-                        <span>Open Drive Video</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                        <span className="text-[11px] text-[#0A192F] font-medium">
+                          Google Drive Video Storage
+                        </span>
+                      </div>
+                      {(selectedInterview.driveViewLink || streamUrl) && (
+                        <a
+                          href={selectedInterview.driveViewLink || streamUrl || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1B4D36] hover:underline"
+                        >
+                          <span>Open in Google Drive</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>
@@ -592,11 +837,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <h4 className="text-[10px] font-bold text-[#0A192F] uppercase tracking-wider mb-2">
                       Questions Answered ({selectedInterview.answers.length})
                     </h4>
-                    <div className="space-y-2 max-h-36 overflow-y-auto">
+                    <div className="space-y-2.5 max-h-56 overflow-y-auto">
                       {selectedInterview.answers.map((ans, idx) => (
-                        <div key={idx} className="p-2.5 rounded-lg bg-[#FAF7F0] border border-[#E5DEC9] text-xs">
-                          <p className="font-bold text-[#0A192F]">Q{ans.questionOrder}: {ans.questionText}</p>
-                          <p className="text-[10px] text-[#0A192F]/70 font-medium mt-0.5">Duration: {ans.durationSeconds} seconds</p>
+                        <div key={idx} className="p-3 rounded-lg bg-[#FAF7F0] border border-[#E5DEC9] text-xs space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <p className="font-bold text-[#0A192F]">Q{ans.questionOrder}: {ans.questionText}</p>
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              {ans.durationSeconds}s
+                            </span>
+                          </div>
+                          {ans.writtenAnswer && (
+                            <div className="p-2.5 rounded-md bg-amber-50/80 border border-amber-200 text-slate-800">
+                              <p className="text-[10px] font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1 mb-1">
+                                <PenTool className="w-3 h-3 text-amber-700" />
+                                <span>Candidate Written Assignment Response:</span>
+                              </p>
+                              <p className="font-sans leading-relaxed whitespace-pre-wrap text-xs font-medium text-slate-900">
+                                {ans.writtenAnswer}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -664,6 +924,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {interviewToDelete && (
+        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FFFDF9] border border-[#E5DEC9] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="p-2.5 bg-red-100 rounded-xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[#0A192F]">Delete Interview Record?</h3>
+                <p className="text-xs text-slate-600">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-700 leading-relaxed bg-[#FAF7F0] p-3 rounded-xl border border-[#E5DEC9]">
+              Are you sure you want to permanently delete the interview record for <strong>{interviewToDelete.candidateName}</strong> ({interviewToDelete.id})? All local recording files will be removed from storage.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setInterviewToDelete(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-[#FAF7F0] rounded-lg border border-[#D8D0BA] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteInterview}
+                disabled={isDeleting}
+                className="px-5 py-2 text-xs font-bold text-white bg-red-700 hover:bg-red-800 rounded-lg shadow-sm cursor-pointer"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

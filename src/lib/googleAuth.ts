@@ -4,50 +4,28 @@
  */
 
 import { google } from 'googleapis';
-import fs from 'fs';
-import path from 'path';
 
 export const DEFAULT_SERVICE_ACCOUNT_EMAIL =
   'genz-interview-storage@genz-upskill-foundation.iam.gserviceaccount.com';
-export const DEFAULT_DRIVE_FOLDER_ID = '1kq1nFO4EDC9eXU2jS6oNoAKTr_qaOcCD';
 export const DEFAULT_SPREADSHEET_ID = '1q7h2pDNtuF3t7FFsErDcmNURt7YDzKAwYTgLTe04O0k';
 export const DEFAULT_SHEET_NAME = 'Candidate_Interviews';
 
 let cachedServiceAccountAuthClient: InstanceType<typeof google.auth.JWT> | null = null;
-let cachedDriveOAuth2Client: InstanceType<typeof google.auth.OAuth2> | null = null;
-
-// Read default OAuth Client ID from firebase-applet-config.json if available
-let firebaseOAuthClientId = '';
-try {
-  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(configPath)) {
-    const raw = fs.readFileSync(configPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    firebaseOAuthClientId = parsed.oAuthClientId || '';
-  }
-} catch {
-  // Ignored
-}
 
 export interface GoogleConfigStatus {
   serviceAccountEmail: string;
   hasPrivateKey: boolean;
   privateKeyLength: number;
-  driveFolderId: string;
   spreadsheetId: string;
   sheetName: string;
+  driveFolderId: string;
+  hasDriveFolderId: boolean;
   hasAdminUsername: boolean;
   hasAdminPassword: boolean;
-  // Drive OAuth2 Status
-  hasDriveOAuth: boolean;
-  hasOAuthRefreshToken: boolean;
-  hasOAuthClientSecret: boolean;
-  oAuthClientId: string;
-  driveAuthMethod: 'oauth2' | 'service_account' | 'none';
 }
 
 /**
- * Returns summary of runtime Google environment variables without exposing private secrets.
+ * Returns summary of runtime Google Sheets & Google Drive environment variables without exposing private secrets.
  */
 export function getGoogleConfigStatus(): GoogleConfigStatus {
   let email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || DEFAULT_SERVICE_ACCOUNT_EMAIL;
@@ -63,45 +41,18 @@ export function getGoogleConfigStatus(): GoogleConfigStatus {
     }
   }
 
-  const clientId =
-    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID ||
-    process.env.GOOGLE_OAUTH_CLIENT_ID ||
-    firebaseOAuthClientId;
-  const clientSecret =
-    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET ||
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
-    '';
-  const refreshToken =
-    process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN ||
-    process.env.GOOGLE_OAUTH_REFRESH_TOKEN ||
-    process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
-    '';
-
-  const hasOAuthRefreshToken = Boolean(refreshToken && refreshToken.trim().length > 0);
-  const hasOAuthClientSecret = Boolean(clientSecret && clientSecret.trim().length > 0);
-  const hasDriveOAuth = hasOAuthRefreshToken && Boolean(clientId);
-
-  let driveAuthMethod: 'oauth2' | 'service_account' | 'none' = 'none';
-  if (hasDriveOAuth) {
-    driveAuthMethod = 'oauth2';
-  } else if (privateKey && privateKey.trim().length > 0) {
-    driveAuthMethod = 'service_account';
-  }
+  const driveFolderId = (process.env.GOOGLE_DRIVE_FOLDER_ID || '').trim();
 
   return {
     serviceAccountEmail: email,
     hasPrivateKey: Boolean(privateKey && privateKey.trim().length > 0),
     privateKeyLength: privateKey ? privateKey.length : 0,
-    driveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID || DEFAULT_DRIVE_FOLDER_ID,
     spreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID,
     sheetName: process.env.GOOGLE_SHEETS_SHEET_NAME || DEFAULT_SHEET_NAME,
+    driveFolderId,
+    hasDriveFolderId: Boolean(driveFolderId.length > 0),
     hasAdminUsername: Boolean(process.env.ADMIN_USERNAME),
     hasAdminPassword: Boolean(process.env.ADMIN_PASSWORD),
-    hasDriveOAuth,
-    hasOAuthRefreshToken,
-    hasOAuthClientSecret,
-    oAuthClientId: clientId ? `${clientId.substring(0, 16)}...` : '',
-    driveAuthMethod,
   };
 }
 
@@ -127,7 +78,7 @@ function cleanPrivateKey(rawKey: string): string {
 
 /**
  * Returns a JWT Google Auth client using service account credentials.
- * Used for Google Sheets synchronization and service-account operations.
+ * Used for Google Sheets and Google Drive storage operations.
  */
 export function getGoogleAuthClient(): InstanceType<typeof google.auth.JWT> | null {
   if (cachedServiceAccountAuthClient) {
@@ -149,7 +100,7 @@ export function getGoogleAuthClient(): InstanceType<typeof google.auth.JWT> | nu
 
   if (!rawPrivateKey || rawPrivateKey.trim() === '') {
     console.warn(
-      '[GoogleAuth] ⚠️ GOOGLE_PRIVATE_KEY environment variable is not configured. Google Sheets integration requires GOOGLE_PRIVATE_KEY.'
+      '[GoogleAuth] ⚠️ GOOGLE_PRIVATE_KEY environment variable is not configured. Google Drive and Sheets integration requires GOOGLE_PRIVATE_KEY.'
     );
     return null;
   }
@@ -161,158 +112,50 @@ export function getGoogleAuthClient(): InstanceType<typeof google.auth.JWT> | nu
       email,
       key: formattedKey,
       scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive',
         'https://www.googleapis.com/auth/drive.file',
-        'https://www.googleapis.com/auth/spreadsheets',
       ],
     });
 
     cachedServiceAccountAuthClient = auth;
-    console.log(`[GoogleAuth] ✅ Service Account JWT Authenticated client initialized for: ${email}`);
+    console.log(`[GoogleAuth] ✅ Google Service Account authenticated for: ${email}`);
     return cachedServiceAccountAuthClient;
   } catch (err) {
-    console.error('[GoogleAuth] ❌ Failed to initialize Google Auth JWT client:', (err as Error).message);
+    console.error('[GoogleAuth] ❌ Failed to initialize Google JWT client:', (err as Error).message);
     return null;
   }
 }
 
 /**
- * Returns a Google OAuth2 client configured with user/admin Google account credentials.
- * When uploading with this OAuth2 client, the file is created with the user account's
- * own Google Drive storage quota into the target folder.
- */
-export function getGoogleDriveOAuthClient(): InstanceType<typeof google.auth.OAuth2> | null {
-  if (cachedDriveOAuth2Client) {
-    return cachedDriveOAuth2Client;
-  }
-
-  const clientId =
-    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID ||
-    process.env.GOOGLE_OAUTH_CLIENT_ID ||
-    firebaseOAuthClientId;
-
-  const clientSecret =
-    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET ||
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
-    '';
-
-  const refreshToken =
-    process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN ||
-    process.env.GOOGLE_OAUTH_REFRESH_TOKEN ||
-    process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
-    '';
-
-  const accessToken =
-    process.env.GOOGLE_DRIVE_OAUTH_ACCESS_TOKEN ||
-    process.env.GOOGLE_OAUTH_ACCESS_TOKEN ||
-    '';
-
-  if (!clientId) {
-    return null;
-  }
-
-  if (!refreshToken && !accessToken) {
-    return null;
-  }
-
-  try {
-    const oauth2Client = new google.auth.OAuth2(
-      clientId,
-      clientSecret,
-      'https://developers.google.com/oauthplayground'
-    );
-
-    oauth2Client.setCredentials({
-      refresh_token: refreshToken || undefined,
-      access_token: accessToken || undefined,
-    });
-
-    cachedDriveOAuth2Client = oauth2Client;
-    console.log('[GoogleAuth] ✅ Google Drive OAuth2 Client initialized successfully.');
-    return cachedDriveOAuth2Client;
-  } catch (err) {
-    console.error('[GoogleAuth] ❌ Failed to initialize Google Drive OAuth2 client:', (err as Error).message);
-    return null;
-  }
-}
-
-/**
- * Returns the best authentication client for Google Drive:
- * 1. OAuth2 client (uses user's personal Google account Drive storage quota)
- * 2. Service Account JWT (fallback)
- */
-export function getGoogleDriveAuthClient():
-  | InstanceType<typeof google.auth.OAuth2>
-  | InstanceType<typeof google.auth.JWT>
-  | null {
-  const oauthClient = getGoogleDriveOAuthClient();
-  if (oauthClient) {
-    return oauthClient;
-  }
-  return getGoogleAuthClient();
-}
-
-/**
- * Diagnostics helper to verify real Google permissions on Drive folder & Spreadsheet.
+ * Diagnostics helper to verify real Google permissions on Spreadsheet & Drive.
  */
 export async function testGooglePermissions(): Promise<{
   authOk: boolean;
-  driveFolderOk: boolean;
-  driveFolderName?: string;
-  driveAuthMethod: 'oauth2' | 'service_account' | 'none';
-  driveError?: string;
   sheetsOk: boolean;
+  driveOk: boolean;
   spreadsheetTitle?: string;
   sheetTabs?: string[];
   sheetsError?: string;
+  driveFolderName?: string;
+  driveError?: string;
   serviceAccountEmail: string;
 }> {
-  const driveAuth = getGoogleDriveAuthClient();
-  const sheetsAuth = getGoogleAuthClient();
+  const auth = getGoogleAuthClient();
   const config = getGoogleConfigStatus();
 
-  let driveFolderOk = false;
-  let driveFolderName: string | undefined;
-  let driveError: string | undefined;
-
   let sheetsOk = false;
+  let driveOk = false;
   let spreadsheetTitle: string | undefined;
   let sheetTabs: string[] | undefined;
   let sheetsError: string | undefined;
+  let driveFolderName: string | undefined;
+  let driveError: string | undefined;
 
-  // 1. Test Drive Folder Access
-  if (driveAuth) {
+  // Test Google Sheets Access (via Service Account JWT)
+  if (auth) {
     try {
-      const drive = google.drive({ version: 'v3', auth: driveAuth as any });
-      const res = await drive.files.get({
-        fileId: config.driveFolderId,
-        fields: 'id, name, mimeType, capabilities',
-        supportsAllDrives: true,
-      });
-      driveFolderOk = true;
-      driveFolderName = res.data.name || config.driveFolderId;
-      console.log(
-        `[GoogleAuth:Diagnostics] ✅ Google Drive Folder accessible via ${config.driveAuthMethod}: "${driveFolderName}" (${config.driveFolderId})`
-      );
-    } catch (err) {
-      driveError = (err as Error).message || String(err);
-      console.error(
-        `[GoogleAuth:Diagnostics] ❌ Google Drive Folder NOT accessible (${config.driveFolderId}):`,
-        driveError
-      );
-      if (driveError.includes('404') || driveError.includes('File not found')) {
-        driveError += ` -> Please ensure the Google Drive folder '${config.driveFolderId}' exists and is accessible.`;
-      }
-    }
-  } else {
-    driveError =
-      'Neither Google Drive OAuth2 nor Service Account credentials are fully configured.';
-  }
-
-  // 2. Test Google Sheets Access (via Service Account JWT)
-  if (sheetsAuth) {
-    try {
-      const sheets = google.sheets({ version: 'v4', auth: sheetsAuth });
+      const sheets = google.sheets({ version: 'v4', auth });
       const res = await sheets.spreadsheets.get({
         spreadsheetId: config.spreadsheetId,
       });
@@ -332,21 +175,51 @@ export async function testGooglePermissions(): Promise<{
         sheetsError += ` -> Please ensure the Google Spreadsheet '${config.spreadsheetId}' is shared with Editor permission to: ${config.serviceAccountEmail}`;
       }
     }
+
+    // Test Google Drive Access (via Service Account JWT)
+    try {
+      const drive = google.drive({ version: 'v3', auth });
+      if (config.driveFolderId) {
+        const folderRes = await drive.files.get({
+          fileId: config.driveFolderId,
+          fields: 'id, name, mimeType',
+          supportsAllDrives: true,
+        });
+        driveOk = true;
+        driveFolderName = folderRes.data.name || config.driveFolderId;
+        console.log(`[GoogleAuth:Diagnostics] ✅ Google Drive target folder accessible: "${driveFolderName}"`);
+      } else {
+        const aboutRes = await drive.about.get({ fields: 'user' });
+        driveOk = true;
+        driveFolderName = 'Root Drive (No specific folder configured)';
+        console.log(`[GoogleAuth:Diagnostics] ✅ Google Drive accessible for user: ${aboutRes.data.user?.emailAddress || config.serviceAccountEmail}`);
+      }
+    } catch (err) {
+      driveError = (err as Error).message || String(err);
+      console.error(
+        `[GoogleAuth:Diagnostics] ❌ Google Drive NOT accessible (${config.driveFolderId || 'root'}):`,
+        driveError
+      );
+      if (driveError.includes('404') || driveError.includes('File not found')) {
+        driveError += ` -> Please ensure the Google Drive folder '${config.driveFolderId}' is shared with Editor permission to: ${config.serviceAccountEmail}`;
+      }
+    }
   } else {
     sheetsError =
-      'Google Sheets Service Account Auth client could not be initialized (missing or invalid GOOGLE_PRIVATE_KEY).';
+      'Google Service Account Auth client could not be initialized (missing or invalid GOOGLE_PRIVATE_KEY).';
+    driveError =
+      'Google Service Account Auth client could not be initialized (missing or invalid GOOGLE_PRIVATE_KEY).';
   }
 
   return {
-    authOk: Boolean(driveFolderOk || sheetsOk),
-    driveFolderOk,
-    driveFolderName,
-    driveAuthMethod: config.driveAuthMethod,
-    driveError,
+    authOk: Boolean(sheetsOk || driveOk),
     sheetsOk,
+    driveOk,
     spreadsheetTitle,
     sheetTabs,
     sheetsError,
+    driveFolderName,
+    driveError,
     serviceAccountEmail: config.serviceAccountEmail,
   };
 }

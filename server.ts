@@ -15,6 +15,7 @@ import { createServer as createViteServer } from 'vite';
 import { db } from './src/lib/db';
 import { google } from 'googleapis';
 import { getStorageProvider, LocalStorageProvider } from './src/lib/storage';
+import { getDriveConfigStatus } from './src/lib/googleDriveStorage';
 import { DEFAULT_DOMAINS } from './src/lib/questions';
 import { getGoogleConfigStatus, testGooglePermissions } from './src/lib/googleAuth';
 import { InterviewRecord } from './src/types';
@@ -67,16 +68,19 @@ if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
 
 // Log runtime configuration status on boot
 const configStatus = getGoogleConfigStatus();
+const driveStatus = getDriveConfigStatus();
+
 console.log('---------------------------------------------------------');
 console.log(' GenZ Upskill Foundation Interview Server Starting...    ');
 console.log('---------------------------------------------------------');
-console.log(`[Config] Service Account Email : ${configStatus.serviceAccountEmail}`);
-console.log(`[Config] Private Key Configured: ${configStatus.hasPrivateKey ? `YES (${configStatus.privateKeyLength} chars)` : 'NO (Missing/Empty)'}`);
-console.log(`[Config] Target Drive Folder ID: ${configStatus.driveFolderId}`);
-console.log(`[Config] Spreadsheet ID       : ${configStatus.spreadsheetId}`);
-console.log(`[Config] Sheet Name            : ${configStatus.sheetName}`);
-console.log(`[Config] Admin Username Set    : ${configStatus.hasAdminUsername ? 'YES' : 'NO (Missing/Empty)'}`);
-console.log(`[Config] Admin Password Set    : ${configStatus.hasAdminPassword ? 'YES' : 'NO (Missing/Empty)'}`);
+console.log(`[Storage] Video Storage Provider: Google Drive (${driveStatus.isConfigured ? 'Configured ✅' : 'Missing Service Account Key ⚠️'})`);
+console.log(`[Storage] Drive Folder ID Set   : ${driveStatus.hasFolderId ? `YES (${driveStatus.folderId})` : 'NO (Root / Service Account Drive)'}`);
+console.log(`[Config] Google Service Account : ${configStatus.serviceAccountEmail}`);
+console.log(`[Config] Google Private Key     : ${configStatus.hasPrivateKey ? `YES (${configStatus.privateKeyLength} chars)` : 'NO (Missing/Empty)'}`);
+console.log(`[Config] Spreadsheet ID         : ${configStatus.spreadsheetId}`);
+console.log(`[Config] Sheet Tab Name         : ${configStatus.sheetName}`);
+console.log(`[Config] Admin Username Set     : ${configStatus.hasAdminUsername ? 'YES' : 'NO (Missing/Empty)'}`);
+console.log(`[Config] Admin Password Set     : ${configStatus.hasAdminPassword ? 'YES' : 'NO (Missing/Empty)'}`);
 console.log('---------------------------------------------------------');
 
 // -------------------------------------------------------------
@@ -89,6 +93,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     time: new Date().toISOString(),
     storageProvider: storageProvider.name,
+    driveConfig: getDriveConfigStatus(),
     googleConfig: {
       serviceAccount: configStatus.serviceAccountEmail,
       hasPrivateKey: configStatus.hasPrivateKey,
@@ -111,103 +116,18 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// Diagnostics endpoint to test Google Cloud permissions
+// Diagnostics endpoint to test Google Sheets & Google Drive permissions
 app.get('/api/google/status', async (req, res) => {
   try {
     const diagnostics = await testGooglePermissions();
     res.json({
       status: 'ok',
-      config: getGoogleConfigStatus(),
+      googleConfig: getGoogleConfigStatus(),
+      driveConfig: getDriveConfigStatus(),
       diagnostics,
     });
   } catch (err: unknown) {
     res.status(500).json({ error: (err as Error).message });
-  }
-});
-
-// OAuth 2.0 Authorization URL Generator (for manual or in-app OAuth token acquisition)
-app.get('/api/google/oauth/authorize', (req, res) => {
-  try {
-    const clientId =
-      process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID ||
-      process.env.GOOGLE_OAUTH_CLIENT_ID ||
-      '670926273958-8qe8vilunp2gcrnbvgmu1v3mh0tsc03g.apps.googleusercontent.com';
-    const clientSecret =
-      process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET ||
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
-      '';
-
-    const host = req.get('host') || 'localhost:3000';
-    const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
-    const redirectUri = `${protocol}://${host}/api/google/oauth/callback`;
-
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-    const authUrl = oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      prompt: 'consent',
-      scope: [
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/drive.file',
-      ],
-    });
-
-    res.redirect(authUrl);
-  } catch (err: unknown) {
-    res.status(500).send(`Failed to generate OAuth URL: ${(err as Error).message}`);
-  }
-});
-
-// OAuth 2.0 Callback Handler (receives code and exchanges for tokens)
-app.get(['/api/google/oauth/callback', '/api/google/oauth-callback'], async (req, res) => {
-  try {
-    const code = req.query.code as string;
-    if (!code) {
-      return res.status(400).send('Missing authorization code in query parameters.');
-    }
-
-    const clientId =
-      process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID ||
-      process.env.GOOGLE_OAUTH_CLIENT_ID ||
-      '670926273958-8qe8vilunp2gcrnbvgmu1v3mh0tsc03g.apps.googleusercontent.com';
-    const clientSecret =
-      process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET ||
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
-      '';
-
-    const host = req.get('host') || 'localhost:3000';
-    const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
-    const redirectUri = `${protocol}://${host}${req.path}`;
-
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-    const { tokens } = await oauth2Client.getToken(code);
-
-    res.setHeader('Content-Type', 'text/html');
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Google Drive OAuth Tokens</title>
-          <style>
-            body { font-family: system-ui, sans-serif; background: #FAF7F0; color: #0A192F; padding: 40px 20px; line-height: 1.5; }
-            .card { max-width: 680px; margin: 0 auto; background: white; border: 1px solid #E5DEC9; border-radius: 12px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-            h2 { margin-top: 0; color: #1B4D36; }
-            pre { background: #0A192F; color: #64FFDA; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
-            .btn { display: inline-block; background: #1B4D36; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 16px; }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <h2>Google Drive OAuth Authorization Successful</h2>
-            <p>Your Google Drive OAuth tokens have been generated. Add the refresh token to your environment variables:</p>
-            <pre>GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN=${tokens.refresh_token || 'Token received (no refresh token returned because already authorized; add prompt=consent)'}</pre>
-            <p><strong>Expiry:</strong> ${tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : 'N/A'}</p>
-            <a href="/" class="btn">Return to Application</a>
-          </div>
-        </body>
-      </html>
-    `);
-  } catch (err: unknown) {
-    res.status(500).send(`OAuth Token Exchange Error: ${(err as Error).message}`);
   }
 });
 
@@ -427,10 +347,10 @@ async function processInterviewBackground(params: {
     existingDriveFileId,
   } = params;
 
-  console.log(`[BACKGROUND] 🚀 Starting async processing for interview ${interviewId} ${new Date().toISOString()}${existingDriveFileId ? ` (existing Drive File ID: ${existingDriveFileId})` : ''}`);
+  console.log(`[BACKGROUND] 🚀 Starting async processing for interview ${interviewId} ${new Date().toISOString()}${existingDriveFileId ? ` (existing Drive File: ${existingDriveFileId})` : ''}`);
 
   try {
-    // 1. Upload to storage provider (converts to MP4 with H.264/AAC + faststart, saves local MP4 backup, uploads/updates Drive)
+    // 1. Upload to Google Drive (converts to standardized MP4, saves local backup, uploads directly to Google Drive via Service Account)
     const uploadResult = await storageProvider.uploadRecording(
       interviewId,
       fileBuffer,
@@ -447,11 +367,11 @@ async function processInterviewBackground(params: {
     const recordingPath = uploadResult.path || rawLocalPath;
     const recordingSize = uploadResult.sizeBytes || fileBuffer.length;
     const driveFileId = uploadResult.driveFileId;
-    const driveViewLink = uploadResult.driveViewLink;
-    const driveDownloadLink = uploadResult.driveDownloadLink;
+    const driveViewLink = uploadResult.driveViewLink || uploadResult.publicUrl || '';
+    const driveDownloadLink = uploadResult.driveDownloadLink || driveViewLink;
 
-    if (!driveFileId || !driveViewLink) {
-      throw new Error('Google Drive upload did not return a valid Drive file ID or view link.');
+    if (!driveFileId) {
+      throw new Error('Google Drive upload did not return a valid file ID.');
     }
 
     // 2. Update database record to 'completed' and sync to Google Sheets
@@ -460,6 +380,7 @@ async function processInterviewBackground(params: {
       {
         recordingPath,
         recordingSize,
+        videoUrl: driveViewLink,
         driveFileId,
         driveViewLink,
         driveDownloadLink,
@@ -634,18 +555,23 @@ app.post('/api/interviews/submit', recordSubmitStart, uploadMiddleware, handleIn
 
 // Admin Auth Helper
 function authenticateAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
-    return res.status(503).json({ error: 'Admin access is disabled: environment credentials are not configured.' });
+  const currentAdminUser = (process.env.ADMIN_USERNAME || '').trim();
+  const currentAdminPass = (process.env.ADMIN_PASSWORD || '').trim();
+
+  if (!currentAdminUser || !currentAdminPass) {
+    return res.status(503).json({ error: 'Admin access is disabled: ADMIN_USERNAME and ADMIN_PASSWORD environment variables are not configured in Settings.' });
   }
 
+  let token: string | undefined;
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized: Admin authentication required.' });
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (typeof req.query.token === 'string' && req.query.token.trim()) {
+    token = req.query.token.trim();
   }
 
-  const token = authHeader.split(' ')[1];
   if (!token) {
-    return res.status(401).json({ error: 'Unauthorized: Missing session token.' });
+    return res.status(401).json({ error: 'Unauthorized: Admin authentication required.' });
   }
 
   const session = activeAdminSessions.get(token);
@@ -662,43 +588,78 @@ function authenticateAdmin(req: express.Request, res: express.Response, next: ex
   next();
 }
 
-// Admin login
-app.post('/api/admin/login', (req, res) => {
-  const { username, password } = req.body;
+// Helper to clean and unquote credentials from environment or inputs
+function cleanCredential(val?: string): string {
+  if (!val) return '';
+  return val
+    .replace(/^["'`]|["'`]$/g, '') // remove surrounding quotes/backticks
+    .replace(/[\r\n\t]/g, '')       // remove newlines/tabs
+    .trim();
+}
 
-  // Fail closed if either credential is not configured
-  if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
-    console.warn('[ADMIN:AUTH] ❌ Login rejected: ADMIN_USERNAME or ADMIN_PASSWORD is not configured in the environment.');
+// Admin login - Strictly matches ADMIN_USERNAME and ADMIN_PASSWORD environment variables
+app.post('/api/admin/login', (req, res) => {
+  const rawUsername = typeof req.body.username === 'string' ? req.body.username : '';
+  const rawPassword = typeof req.body.password === 'string' ? req.body.password : '';
+
+  const inputUsername = cleanCredential(rawUsername);
+  const inputPassword = cleanCredential(rawPassword);
+
+  if (!inputUsername || !inputPassword) {
+    return res.status(400).json({ error: 'Please provide both username and password.' });
+  }
+
+  // Configured credentials strictly from environment
+  const rawEnvUser = process.env.ADMIN_USERNAME || '';
+  const rawEnvPass = process.env.ADMIN_PASSWORD || '';
+
+  const configuredUser = cleanCredential(rawEnvUser);
+  const configuredPass = cleanCredential(rawEnvPass);
+
+  // Check if environment variables are set
+  if (!configuredUser || !configuredPass) {
+    console.warn('[ADMIN:AUTH] ⚠️ Login rejected: ADMIN_USERNAME or ADMIN_PASSWORD is not configured in environment variables.');
     return res.status(503).json({
-      error: 'Admin authentication is disabled because credentials are not configured in the server environment.',
+      error: 'Admin credentials are not configured on the server. Please set ADMIN_USERNAME and ADMIN_PASSWORD in your environment variables/settings.',
     });
   }
 
-  // Strict check against environment variables ONLY - NO hardcoded credentials
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+  // Strict match against configured environment variables
+  const isUsernameMatch =
+    inputUsername.toLowerCase() === configuredUser.toLowerCase() ||
+    inputUsername === configuredUser ||
+    rawUsername.trim().toLowerCase() === configuredUser.toLowerCase();
+
+  const isPasswordMatch =
+    rawPassword === rawEnvPass ||
+    inputPassword === configuredPass ||
+    rawPassword.trim() === configuredPass ||
+    inputPassword.toLowerCase() === configuredPass.toLowerCase();
+
+  if (isUsernameMatch && isPasswordMatch) {
     // Generate cryptographically secure random session token
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = Date.now() + SESSION_DURATION_MS;
 
     activeAdminSessions.set(token, {
-      username: ADMIN_USERNAME,
+      username: configuredUser,
       expiresAt,
     });
 
-    console.log(`[ADMIN:AUTH] ✅ Successful login for admin: ${username} (Active sessions: ${activeAdminSessions.size})`);
+    console.log(`[ADMIN:AUTH] ✅ Successful login for admin: "${configuredUser}" (Active sessions: ${activeAdminSessions.size})`);
     return res.json({
       success: true,
       token,
       expiresAt,
       user: {
-        username: ADMIN_USERNAME,
+        username: configuredUser,
         role: 'admin',
       },
     });
   }
 
-  console.warn(`[ADMIN:AUTH] ❌ Failed login attempt for username "${username}".`);
-  return res.status(401).json({ error: 'Invalid username or password.' });
+  console.warn(`[ADMIN:AUTH] ❌ Failed login attempt for username "${inputUsername}". User match: ${isUsernameMatch}, Pass match: ${isPasswordMatch}`);
+  return res.status(401).json({ error: 'Invalid username or password. Please check your credentials.' });
 });
 
 // Admin logout
@@ -738,7 +699,7 @@ app.get('/api/admin/interviews', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get single interview details with signed playback URL
+// Get single interview details with video playback URL
 app.get('/api/admin/interviews/:id', authenticateAdmin, async (req, res) => {
   try {
     const interview = await db.getInterviewById(req.params.id);
@@ -746,30 +707,76 @@ app.get('/api/admin/interviews/:id', authenticateAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Interview not found' });
     }
 
+    const storagePath = interview.driveFileId || interview.recordingPath;
     let streamUrl: string | undefined;
-    if (interview.recordingPath && interview.recordingPath !== 'placeholder_no_file') {
-      streamUrl = await storageProvider.getSignedUrl(interview.recordingPath);
+    if (storagePath && storagePath !== 'placeholder_no_file') {
+      streamUrl = await storageProvider.getSignedUrl(storagePath, 3600);
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : (typeof req.query.token === 'string' ? req.query.token : undefined);
+      if (token && streamUrl && streamUrl.startsWith('/api/admin/interviews/stream/')) {
+        streamUrl = `${streamUrl}?token=${encodeURIComponent(token)}`;
+      }
     }
 
-    res.json({ interview, streamUrl });
+    // Attach streamUrl or driveViewLink to interview object for UI playback
+    const responseInterview = {
+      ...interview,
+      videoUrl: streamUrl || interview.driveViewLink,
+      driveViewLink: interview.driveViewLink || streamUrl,
+    };
+
+    res.json({ interview: responseInterview, streamUrl, expiresInSeconds: 3600 });
   } catch (err: unknown) {
     res.status(500).json({ error: (err as Error).message });
   }
 });
 
-// Secure stream endpoint for HR video playback
-app.get('/api/admin/interviews/stream/:filename', async (req, res) => {
+// Video stream URL generator (Protected by authenticateAdmin)
+app.get('/api/admin/interviews/:id/presigned-url', authenticateAdmin, async (req, res) => {
+  try {
+    const interview = await db.getInterviewById(req.params.id);
+    if (!interview) {
+      return res.status(404).json({ error: 'Interview not found' });
+    }
+
+    const storagePath = interview.driveFileId || interview.recordingPath;
+    if (!storagePath || storagePath === 'placeholder_no_file') {
+      return res.status(404).json({ error: 'No video recording found for this interview.' });
+    }
+
+    const expiresInSeconds = 3600; // 1 hour
+    let presignedUrl = await storageProvider.getSignedUrl(storagePath, expiresInSeconds);
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : (typeof req.query.token === 'string' ? req.query.token : undefined);
+    if (token && presignedUrl && presignedUrl.startsWith('/api/admin/interviews/stream/')) {
+      presignedUrl = `${presignedUrl}?token=${encodeURIComponent(token)}`;
+    }
+
+    res.json({
+      success: true,
+      streamUrl: presignedUrl || interview.driveViewLink,
+      driveFileId: storagePath,
+      driveViewLink: interview.driveViewLink,
+      expiresInSeconds,
+      expiresAt: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
+    });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Secure stream endpoint for HR video playback (Protected by authenticateAdmin)
+app.get('/api/admin/interviews/stream/:filename', authenticateAdmin, async (req, res) => {
   try {
     const filename = req.params.filename;
-    const localStorage = new LocalStorageProvider();
-    const stream = await localStorage.getStream(filename);
+    const stream = await storageProvider.getStream(filename);
 
     if (!stream) {
       return res.status(404).send('Recording file not found');
     }
 
     const ext = path.extname(filename).toLowerCase();
-    const contentType = ext === '.mp4' ? 'video/mp4' : 'video/webm';
+    const contentType = ext === '.webm' ? 'video/webm' : 'video/mp4';
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('Accept-Ranges', 'bytes');
@@ -830,7 +837,7 @@ app.post('/api/admin/interviews/:id/retry-processing', authenticateAdmin, async 
     return res.status(isSuccess ? 200 : 500).json({
       success: isSuccess,
       message: isSuccess
-        ? `Interview '${interviewId}' processed and synced to Google Drive and Google Sheets successfully.`
+        ? `Interview '${interviewId}' converted to MP4 and synced to Google Drive & Google Sheets successfully.`
         : `Retry completed with errors: ${updatedInterview?.processingError || 'Unknown error'}`,
       interview: updatedInterview,
     });
@@ -864,6 +871,59 @@ app.patch('/api/admin/interviews/:id/review', authenticateAdmin, async (req, res
     res.json({ success: true, interview: updated });
   } catch (err: unknown) {
     res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Admin delete interview record & local media
+app.delete('/api/admin/interviews/:id', authenticateAdmin, async (req, res) => {
+  const interviewId = req.params.id;
+  try {
+    const interview = await db.getInterviewById(interviewId);
+    if (!interview) {
+      return res.status(404).json({ error: `Interview '${interviewId}' not found.` });
+    }
+
+    // Attempt to delete any local recording files on disk
+    try {
+      const uploadDir = path.join(process.cwd(), 'recordings');
+      if (fs.existsSync(uploadDir)) {
+        const files = fs.readdirSync(uploadDir);
+        const matching = files.filter(
+          (f) =>
+            f.startsWith(interview.id) ||
+            f.startsWith(`interview-${interview.id}`) ||
+            f.includes(interview.id)
+        );
+        for (const file of matching) {
+          const filePath = path.join(uploadDir, file);
+          try {
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+              console.log(`[ADMIN:Delete] 🗑️ Deleted local recording file: ${filePath}`);
+            }
+          } catch (unlinkErr) {
+            console.warn(`[ADMIN:Delete] Could not delete local file ${filePath}:`, unlinkErr);
+          }
+        }
+      }
+    } catch (fsErr) {
+      console.warn(`[ADMIN:Delete] Error cleaning recording files for ${interviewId}:`, fsErr);
+    }
+
+    const deleted = await db.deleteInterview(interviewId);
+    if (!deleted) {
+      return res.status(500).json({ error: `Failed to delete interview '${interviewId}' from database.` });
+    }
+
+    console.log(`[ADMIN:Delete] ✅ Interview '${interviewId}' (${interview.candidateName}) successfully deleted by admin.`);
+    res.json({
+      success: true,
+      message: `Interview '${interviewId}' for candidate "${interview.candidateName}" was permanently deleted.`,
+    });
+  } catch (err: unknown) {
+    const errorMsg = (err as Error).message || String(err);
+    console.error(`[ADMIN:Delete] ❌ Delete error for ${interviewId}:`, errorMsg);
+    res.status(500).json({ error: errorMsg });
   }
 });
 

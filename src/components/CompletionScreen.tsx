@@ -130,7 +130,7 @@ export const CompletionScreen: React.FC<CompletionScreenProps> = ({
 
             <div className="pt-1">
               <a
-                href="https://chat.whatsapp.com/L1kwthk18S5L4RmADDHYa2?s=cl&p=a&ilr=1"
+                href="https://chat.whatsapp.com/JfcsKP9lVmXBXc01LqySQn?s=cl&p=a&ilr=1"
                 target="_blank"
                 rel="noopener noreferrer"
                 id="btn-join-whatsapp-community"

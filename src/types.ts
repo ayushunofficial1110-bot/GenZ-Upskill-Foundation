@@ -5,14 +5,15 @@
 
 export type InternshipDomain =
   | 'Social Media Marketing (SMM)'
+  | 'Content Writing (CW)'
   | 'Content Writing'
-  | 'Human Resources (HR)'
   | 'AI';
 
 export interface CandidateFormData {
   fullName: string;
   email: string;
   mobile: string;
+  countryCode?: string;
   college: string;
   domain: InternshipDomain;
   agreedToConsent: boolean;
@@ -37,6 +38,7 @@ export interface InterviewQuestion {
   english: string;
   hindi: string;
   active: boolean;
+  isWrittenAnswer?: boolean;
 }
 
 export interface InterviewIntroStep {
@@ -55,6 +57,7 @@ export interface QuestionAnswerMetadata {
   startedAtSeconds: number;
   completedAtSeconds: number;
   durationSeconds: number;
+  writtenAnswer?: string;
 }
 
 export type InterviewStatus = 'pending' | 'in_progress' | 'completed' | 'submitted';
@@ -84,6 +87,7 @@ export interface InterviewRecord {
   recordingPath?: string;
   recordingSize?: number;
   recordingDurationSeconds?: number;
+  videoUrl?: string;
   driveFileId?: string;
   driveViewLink?: string;
   driveDownloadLink?: string;
