@@ -17,7 +17,7 @@ import { google } from 'googleapis';
 import { getStorageProvider, LocalStorageProvider } from './src/lib/storage';
 import { getDriveConfigStatus } from './src/lib/googleDriveStorage';
 import { DEFAULT_DOMAINS } from './src/lib/questions';
-import { getGoogleConfigStatus, testGooglePermissions } from './src/lib/googleAuth';
+import { getGoogleConfigStatus, testGooglePermissions, getGoogleAuthDiagnostics } from './src/lib/googleAuth';
 import { InterviewRecord } from './src/types';
 
 const app = express();
@@ -945,6 +945,34 @@ app.post('/api/admin/questions', authenticateAdmin, async (req, res) => {
     }
     const saved = await db.addOrUpdateQuestion(question);
     res.json({ success: true, question: saved });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Admin Google Auth Runtime Diagnostics Endpoint
+app.get('/api/admin/google-auth-status', authenticateAdmin, (req, res) => {
+  try {
+    const diagnostics = getGoogleAuthDiagnostics();
+    console.log('[ADMIN:Diagnostics] 🔍 Google Auth status requested:', {
+      resolvedAuthType: diagnostics.resolvedAuthType,
+      hasOAuthRefreshToken: diagnostics.hasOAuthRefreshToken,
+      refreshTokenPrefix: diagnostics.oauthRefreshTokenPrefix,
+      hasOAuthClientId: diagnostics.hasOAuthClientId,
+      hasOAuthClientSecret: diagnostics.hasOAuthClientSecret,
+      hasServiceAccountPrivateKey: diagnostics.hasServiceAccountPrivateKey,
+    });
+    res.json(diagnostics);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Admin test live Google permissions (Sheets & Drive)
+app.get('/api/admin/test-google-access', authenticateAdmin, async (req, res) => {
+  try {
+    const permissions = await testGooglePermissions();
+    res.json(permissions);
   } catch (err: unknown) {
     res.status(500).json({ error: (err as Error).message });
   }

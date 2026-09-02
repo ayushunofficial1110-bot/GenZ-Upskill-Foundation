@@ -10,12 +10,14 @@ export const DEFAULT_SERVICE_ACCOUNT_EMAIL =
 export const DEFAULT_SPREADSHEET_ID = '1q7h2pDNtuF3t7FFsErDcmNURt7YDzKAwYTgLTe04O0k';
 export const DEFAULT_SHEET_NAME = 'Candidate_Interviews';
 
-let cachedServiceAccountAuthClient: InstanceType<typeof google.auth.JWT> | null = null;
+let cachedAuthClient: InstanceType<typeof google.auth.JWT> | InstanceType<typeof google.auth.OAuth2> | null = null;
 
 export interface GoogleConfigStatus {
   serviceAccountEmail: string;
+  authType: 'oauth2' | 'service_account' | 'none';
   hasPrivateKey: boolean;
   privateKeyLength: number;
+  hasOAuthRefreshToken: boolean;
   spreadsheetId: string;
   sheetName: string;
   driveFolderId: string;
@@ -24,10 +26,68 @@ export interface GoogleConfigStatus {
   hasAdminPassword: boolean;
 }
 
+export interface GoogleAuthDiagnostics {
+  hasOAuthClientId: boolean;
+  oauthClientIdLength: number;
+  hasOAuthClientSecret: boolean;
+  oauthClientSecretLength: number;
+  hasOAuthRefreshToken: boolean;
+  oauthRefreshTokenLength: number;
+  oauthRefreshTokenPrefix: string;
+  resolvedAuthType: 'oauth2' | 'service_account' | 'none';
+  hasServiceAccountPrivateKey: boolean;
+  serviceAccountEmail: string;
+  spreadsheetId: string;
+  sheetName: string;
+  driveFolderId: string;
+  hasDriveFolderId: boolean;
+}
+
+/**
+ * Normalizes string values from environment variables by removing wrapping quotes and whitespace.
+ */
+export function cleanEnvString(raw?: string): string {
+  if (!raw) return '';
+  let val = raw.trim();
+  if (
+    (val.startsWith('"') && val.endsWith('"')) ||
+    (val.startsWith("'") && val.endsWith("'")) ||
+    (val.startsWith('`') && val.endsWith('`'))
+  ) {
+    val = val.slice(1, -1).trim();
+  }
+  return val.replace(/[\r\n\t]/g, '').trim();
+}
+
 /**
  * Returns summary of runtime Google Sheets & Google Drive environment variables without exposing private secrets.
  */
 export function getGoogleConfigStatus(): GoogleConfigStatus {
+  const oauthClientId = cleanEnvString(
+    process.env.GOOGLE_OAUTH_CLIENT_ID ||
+    process.env.GOOGLE_CLIENT_ID ||
+    process.env.GOOGLE_DRIVE_CLIENT_ID ||
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID ||
+    process.env.OAUTH_CLIENT_ID ||
+    ''
+  );
+  const oauthClientSecret = cleanEnvString(
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET ||
+    process.env.OAUTH_CLIENT_SECRET ||
+    ''
+  );
+  const oauthRefreshToken = cleanEnvString(
+    process.env.GOOGLE_OAUTH_REFRESH_TOKEN ||
+    process.env.GOOGLE_REFRESH_TOKEN ||
+    process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
+    process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN ||
+    process.env.OAUTH_REFRESH_TOKEN ||
+    ''
+  );
+
   let email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || DEFAULT_SERVICE_ACCOUNT_EMAIL;
   let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
 
@@ -41,18 +101,94 @@ export function getGoogleConfigStatus(): GoogleConfigStatus {
     }
   }
 
-  const driveFolderId = (process.env.GOOGLE_DRIVE_FOLDER_ID || '').trim();
+  const driveFolderId = cleanEnvString(process.env.GOOGLE_DRIVE_FOLDER_ID || '');
+
+  let authType: 'oauth2' | 'service_account' | 'none' = 'none';
+  if (oauthRefreshToken.length > 0 && oauthClientId.length > 0 && oauthClientSecret.length > 0) {
+    authType = 'oauth2';
+  } else if (privateKey.trim().length > 0) {
+    authType = 'service_account';
+  }
 
   return {
     serviceAccountEmail: email,
+    authType,
     hasPrivateKey: Boolean(privateKey && privateKey.trim().length > 0),
     privateKeyLength: privateKey ? privateKey.length : 0,
+    hasOAuthRefreshToken: Boolean(oauthRefreshToken.length > 0),
     spreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID,
     sheetName: process.env.GOOGLE_SHEETS_SHEET_NAME || DEFAULT_SHEET_NAME,
     driveFolderId,
     hasDriveFolderId: Boolean(driveFolderId.length > 0),
     hasAdminUsername: Boolean(process.env.ADMIN_USERNAME),
     hasAdminPassword: Boolean(process.env.ADMIN_PASSWORD),
+  };
+}
+
+/**
+ * Returns exact Google Auth runtime diagnostics for admin verification without exposing secrets.
+ */
+export function getGoogleAuthDiagnostics(): GoogleAuthDiagnostics {
+  const oauthClientId = cleanEnvString(
+    process.env.GOOGLE_OAUTH_CLIENT_ID ||
+    process.env.GOOGLE_CLIENT_ID ||
+    process.env.GOOGLE_DRIVE_CLIENT_ID ||
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID ||
+    process.env.OAUTH_CLIENT_ID ||
+    ''
+  );
+  const oauthClientSecret = cleanEnvString(
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET ||
+    process.env.OAUTH_CLIENT_SECRET ||
+    ''
+  );
+  const oauthRefreshToken = cleanEnvString(
+    process.env.GOOGLE_OAUTH_REFRESH_TOKEN ||
+    process.env.GOOGLE_REFRESH_TOKEN ||
+    process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
+    process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN ||
+    process.env.OAUTH_REFRESH_TOKEN ||
+    ''
+  );
+
+  let email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || DEFAULT_SERVICE_ACCOUNT_EMAIL;
+  let rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY || '';
+  if (!rawPrivateKey && process.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON) {
+    try {
+      const parsed = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON);
+      if (parsed.client_email) email = parsed.client_email;
+      if (parsed.private_key) rawPrivateKey = parsed.private_key;
+    } catch {}
+  }
+  const cleanKey = cleanPrivateKey(rawPrivateKey);
+
+  let resolvedAuthType: 'oauth2' | 'service_account' | 'none' = 'none';
+  if (oauthRefreshToken.length > 0 && oauthClientId.length > 0 && oauthClientSecret.length > 0) {
+    resolvedAuthType = 'oauth2';
+  } else if (cleanKey.length > 0) {
+    resolvedAuthType = 'service_account';
+  }
+
+  const driveFolderId = cleanEnvString(process.env.GOOGLE_DRIVE_FOLDER_ID || '');
+
+  return {
+    hasOAuthClientId: Boolean(oauthClientId.length > 0),
+    oauthClientIdLength: oauthClientId.length,
+    hasOAuthClientSecret: Boolean(oauthClientSecret.length > 0),
+    oauthClientSecretLength: oauthClientSecret.length,
+    hasOAuthRefreshToken: Boolean(oauthRefreshToken.length > 0),
+    oauthRefreshTokenLength: oauthRefreshToken.length,
+    oauthRefreshTokenPrefix: oauthRefreshToken.length > 0 ? oauthRefreshToken.slice(0, 6) : '',
+    resolvedAuthType,
+    hasServiceAccountPrivateKey: Boolean(cleanKey.length > 0),
+    serviceAccountEmail: email,
+    spreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID,
+    sheetName: process.env.GOOGLE_SHEETS_SHEET_NAME || DEFAULT_SHEET_NAME,
+    driveFolderId,
+    hasDriveFolderId: Boolean(driveFolderId.length > 0),
   };
 }
 
@@ -77,14 +213,58 @@ function cleanPrivateKey(rawKey: string): string {
 }
 
 /**
- * Returns a JWT Google Auth client using service account credentials.
+ * Returns an authenticated Google Auth client (OAuth2 or Service Account JWT).
  * Used for Google Sheets and Google Drive storage operations.
  */
-export function getGoogleAuthClient(): InstanceType<typeof google.auth.JWT> | null {
-  if (cachedServiceAccountAuthClient) {
-    return cachedServiceAccountAuthClient;
+export function getGoogleAuthClient(forceRefresh: boolean = false): InstanceType<typeof google.auth.JWT> | InstanceType<typeof google.auth.OAuth2> | null {
+  if (cachedAuthClient && !forceRefresh) {
+    return cachedAuthClient;
   }
 
+  // 1. Check for OAuth2 Refresh Token credentials
+  const oauthClientId = cleanEnvString(
+    process.env.GOOGLE_OAUTH_CLIENT_ID ||
+    process.env.GOOGLE_CLIENT_ID ||
+    process.env.GOOGLE_DRIVE_CLIENT_ID ||
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID ||
+    process.env.OAUTH_CLIENT_ID ||
+    ''
+  );
+  const oauthClientSecret = cleanEnvString(
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET ||
+    process.env.OAUTH_CLIENT_SECRET ||
+    ''
+  );
+  const oauthRefreshToken = cleanEnvString(
+    process.env.GOOGLE_OAUTH_REFRESH_TOKEN ||
+    process.env.GOOGLE_REFRESH_TOKEN ||
+    process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
+    process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN ||
+    process.env.OAUTH_REFRESH_TOKEN ||
+    ''
+  );
+
+  if (oauthRefreshToken && oauthClientId && oauthClientSecret) {
+    try {
+      const oauth2Client = new google.auth.OAuth2(
+        oauthClientId,
+        oauthClientSecret
+      );
+      oauth2Client.setCredentials({
+        refresh_token: oauthRefreshToken,
+      });
+      cachedAuthClient = oauth2Client;
+      console.log(`[GoogleAuth] ✅ Google OAuth2 authenticated with refresh token (client: ${oauthClientId.slice(0, 12)}...).`);
+      return cachedAuthClient;
+    } catch (oauthErr) {
+      console.error('[GoogleAuth] ❌ Failed to initialize Google OAuth2 client:', (oauthErr as Error).message);
+    }
+  }
+
+  // 2. Check for Service Account JWT credentials
   let email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || DEFAULT_SERVICE_ACCOUNT_EMAIL;
   let rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
 
@@ -98,31 +278,50 @@ export function getGoogleAuthClient(): InstanceType<typeof google.auth.JWT> | nu
     }
   }
 
-  if (!rawPrivateKey || rawPrivateKey.trim() === '') {
-    console.warn(
-      '[GoogleAuth] ⚠️ GOOGLE_PRIVATE_KEY environment variable is not configured. Google Drive and Sheets integration requires GOOGLE_PRIVATE_KEY.'
-    );
+  if (rawPrivateKey && rawPrivateKey.trim() !== '') {
+    try {
+      const formattedKey = cleanPrivateKey(rawPrivateKey);
+
+      const auth = new google.auth.JWT({
+        email,
+        key: formattedKey,
+        scopes: [
+          'https://www.googleapis.com/auth/spreadsheets',
+          'https://www.googleapis.com/auth/drive',
+          'https://www.googleapis.com/auth/drive.file',
+        ],
+      });
+
+      cachedAuthClient = auth;
+      console.log(`[GoogleAuth] ✅ Google Service Account authenticated for: ${email}`);
+      return cachedAuthClient;
+    } catch (err) {
+      console.error('[GoogleAuth] ❌ Failed to initialize Google JWT client:', (err as Error).message);
+      return null;
+    }
+  }
+
+  console.warn(
+    '[GoogleAuth] ⚠️ No Google credentials configured (neither OAuth2 refresh token nor Service Account private key).'
+  );
+  return null;
+}
+
+/**
+ * Safely fetches a valid Bearer Access Token without throwing JSON parse errors.
+ */
+export async function getGoogleAccessToken(): Promise<string | null> {
+  const auth = getGoogleAuthClient();
+  if (!auth) {
     return null;
   }
 
   try {
-    const formattedKey = cleanPrivateKey(rawPrivateKey);
-
-    const auth = new google.auth.JWT({
-      email,
-      key: formattedKey,
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/drive.file',
-      ],
-    });
-
-    cachedServiceAccountAuthClient = auth;
-    console.log(`[GoogleAuth] ✅ Google Service Account authenticated for: ${email}`);
-    return cachedServiceAccountAuthClient;
+    const tokenResponse = await auth.getAccessToken();
+    const token = typeof tokenResponse === 'string' ? tokenResponse : tokenResponse?.token;
+    return token || null;
   } catch (err) {
-    console.error('[GoogleAuth] ❌ Failed to initialize Google JWT client:', (err as Error).message);
+    console.error('[GoogleAuth] ❌ Error acquiring Google access token:', (err as Error).message);
     return null;
   }
 }

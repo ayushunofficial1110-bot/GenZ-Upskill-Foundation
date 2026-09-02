@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { InterviewRecord, AdminStats, HRReviewStatus } from '../types';
 import { DEFAULT_DOMAINS } from '../lib/questions';
 import {
@@ -29,7 +29,33 @@ import {
   Check,
   PenTool,
   Link as LinkIcon,
+  ShieldCheck,
+  Key,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Radio,
+  FileSpreadsheet,
+  HardDrive,
+  Info,
 } from 'lucide-react';
+
+interface GoogleAuthDiagnosticsResponse {
+  hasOAuthClientId: boolean;
+  oauthClientIdLength: number;
+  hasOAuthClientSecret: boolean;
+  oauthClientSecretLength: number;
+  hasOAuthRefreshToken: boolean;
+  oauthRefreshTokenLength: number;
+  oauthRefreshTokenPrefix: string;
+  resolvedAuthType: 'oauth2' | 'service_account' | 'none';
+  hasServiceAccountPrivateKey: boolean;
+  serviceAccountEmail?: string;
+  spreadsheetId?: string;
+  sheetName?: string;
+  driveFolderId?: string;
+  hasDriveFolderId?: boolean;
+}
 
 interface AdminDashboardProps {
   token: string;
@@ -52,6 +78,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [statusFilter, setStatusFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Auto-Polling & Live Refresh State
+  const [isPolling, setIsPolling] = useState(true);
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
+  const [newInterviewBanner, setNewInterviewBanner] = useState<{ count: number; name: string; domain: string } | null>(null);
+  const knownInterviewIdsRef = useRef<Set<string>>(new Set());
+  const isInitialLoadRef = useRef(true);
+
+  // Google Auth Diagnostics State
+  const [googleAuthStatus, setGoogleAuthStatus] = useState<GoogleAuthDiagnosticsResponse | null>(null);
+  const [isLoadingAuthStatus, setIsLoadingAuthStatus] = useState(false);
+  const [testPermissionsResult, setTestPermissionsResult] = useState<any>(null);
+  const [isTestingPermissions, setIsTestingPermissions] = useState(false);
+  const [showDiagnosticsPanel, setShowDiagnosticsPanel] = useState(false);
 
   // Retry Sync State
   const [retryingIds, setRetryingIds] = useState<Record<string, boolean>>({});
@@ -78,6 +120,133 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setBaseUrl(window.location.origin);
     }
   }, []);
+
+  const fetchGoogleAuthStatus = async () => {
+    setIsLoadingAuthStatus(true);
+    try {
+      const res = await fetch('/api/admin/google-auth-status', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleAuthStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch Google Auth diagnostics:', err);
+    } finally {
+      setIsLoadingAuthStatus(false);
+    }
+  };
+
+  const handleTestGooglePermissions = async () => {
+    setIsTestingPermissions(true);
+    setTestPermissionsResult(null);
+    try {
+      const res = await fetch('/api/admin/test-google-access', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setTestPermissionsResult(data);
+    } catch (err: unknown) {
+      setTestPermissionsResult({
+        success: false,
+        error: (err as Error).message || 'Failed to contact test endpoint',
+      });
+    } finally {
+      setIsTestingPermissions(false);
+    }
+  };
+
+  const fetchDashboardData = async (isBackground: boolean = false) => {
+    if (!isBackground) {
+      setIsManualRefreshing(true);
+      if (interviews.length === 0) {
+        setIsLoading(true);
+      }
+    }
+
+    try {
+      // 1. Fetch stats
+      const statsRes = await fetch('/api/admin/stats', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data.stats);
+      }
+
+      // 2. Fetch interviews
+      const query = new URLSearchParams();
+      if (domainFilter !== 'All') query.append('domain', domainFilter);
+      if (statusFilter !== 'All') query.append('status', statusFilter);
+      if (searchQuery.trim()) query.append('search', searchQuery.trim());
+
+      const interviewsRes = await fetch(`/api/admin/interviews?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (interviewsRes.ok) {
+        const data = await interviewsRes.json();
+        const freshList: InterviewRecord[] = data.interviews || [];
+
+        // Check for newly arrived interviews if this is a background poll
+        if (!isInitialLoadRef.current && isBackground && knownInterviewIdsRef.current.size > 0) {
+          const newlyFound = freshList.filter((i) => !knownInterviewIdsRef.current.has(i.id));
+          if (newlyFound.length > 0) {
+            console.log(
+              `[AdminDashboard] ⚡ Detected ${newlyFound.length} new interview(s):`,
+              newlyFound.map((i) => i.candidateName)
+            );
+            setNewlyArrivedIds((prev) => {
+              const next = new Set(prev);
+              newlyFound.forEach((i) => next.add(i.id));
+              return next;
+            });
+            setNewInterviewBanner({
+              count: newlyFound.length,
+              name: newlyFound[0].candidateName,
+              domain: newlyFound[0].domain,
+            });
+          }
+        }
+
+        // Register all current IDs as known
+        freshList.forEach((i) => knownInterviewIdsRef.current.add(i.id));
+        isInitialLoadRef.current = false;
+
+        setInterviews(freshList);
+        setLastRefreshedAt(new Date());
+
+        // Update currently selected interview without interrupting review notes
+        setSelectedInterview((currentSelected) => {
+          if (!currentSelected) return null;
+          const freshItem = freshList.find((i) => i.id === currentSelected.id);
+          return freshItem ? { ...currentSelected, ...freshItem } : currentSelected;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch admin data:', err);
+    } finally {
+      setIsLoading(false);
+      setIsManualRefreshing(false);
+    }
+  };
+
+  // Initial load and filter change trigger
+  useEffect(() => {
+    fetchDashboardData(false);
+    fetchGoogleAuthStatus();
+  }, [domainFilter, statusFilter]);
+
+  // Background Auto-Polling every 15-20 seconds (15s)
+  useEffect(() => {
+    if (!isPolling) return;
+    const interval = setInterval(() => {
+      fetchDashboardData(true);
+    }, 15000); // 15 seconds
+
+    return () => clearInterval(interval);
+  }, [domainFilter, statusFilter, searchQuery, isPolling, token]);
 
   const handleRefreshVideoUrl = async (interviewId?: string) => {
     const targetId = interviewId || selectedInterview?.id;
@@ -199,43 +368,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const fetchDashboardData = async () => {
-    setIsLoading(true);
-    try {
-      // Fetch stats
-      const statsRes = await fetch('/api/admin/stats', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (statsRes.ok) {
-        const data = await statsRes.json();
-        setStats(data.stats);
-      }
-
-      // Fetch interviews
-      const query = new URLSearchParams();
-      if (domainFilter !== 'All') query.append('domain', domainFilter);
-      if (statusFilter !== 'All') query.append('status', statusFilter);
-      if (searchQuery) query.append('search', searchQuery);
-
-      const interviewsRes = await fetch(`/api/admin/interviews?${query.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (interviewsRes.ok) {
-        const data = await interviewsRes.json();
-        setInterviews(data.interviews || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch admin data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, [domainFilter, statusFilter]);
-
   const handleSelectInterview = async (item: InterviewRecord) => {
+    // Clear new candidate badge on click
+    if (newlyArrivedIds.has(item.id)) {
+      setNewlyArrivedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+
     setSelectedInterview(item);
     setReviewStatus(item.hrReviewStatus || 'under_review');
     setReviewNotes(item.hrNotes || '');
@@ -282,7 +424,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setInterviews((prev) =>
           prev.map((item) => (item.id === data.interview.id ? data.interview : item))
         );
-        fetchDashboardData();
+        fetchDashboardData(true);
       }
     } catch (e) {
       console.error('Failed to save review:', e);
@@ -323,17 +465,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Live Auto-Polling Indicator */}
+          <div
+            className="hidden md:flex items-center gap-2 px-3 py-1 bg-[#1B4D36]/40 text-emerald-300 rounded-full text-xs font-medium border border-emerald-500/30"
+            title={`Auto-sync polls every 15s. Last updated: ${lastRefreshedAt.toLocaleTimeString()}`}
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span>Live Auto-Sync (15s)</span>
+          </div>
+
           <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-xs font-medium text-slate-200 border border-[#D4AF37]/30">
             <UserCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
             <span>Manual Review Panel</span>
           </div>
 
+          {/* Full Server Re-Fetch Manual Refresh Button */}
           <button
-            onClick={fetchDashboardData}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
-            title="Refresh Data"
+            onClick={() => {
+              fetchDashboardData(false);
+              fetchGoogleAuthStatus();
+            }}
+            disabled={isManualRefreshing}
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+            title="Force Full Re-fetch from Server"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isManualRefreshing || isLoading ? 'animate-spin' : ''}`} />
           </button>
 
           <button
@@ -458,6 +617,216 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
 
+        {/* Google Drive & Sheets Storage & Auth Diagnostics Panel */}
+        <div className="max-w-7xl mx-auto bg-[#FFFDF9] border border-[#D8D0BA] rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-[#FAF7F0] rounded-xl border border-[#D8D0BA] text-[#1B4D36]">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#0A192F] flex items-center gap-2">
+                  <span>Google Storage & Authentication Runtime Diagnostics</span>
+                </h3>
+                <p className="text-xs text-slate-600">
+                  Real-time server configuration status for Google Drive video storage & Google Sheets sync.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-start sm:self-center">
+              {googleAuthStatus ? (
+                googleAuthStatus.resolvedAuthType === 'oauth2' ? (
+                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>OAuth2 Active (Personal Storage Quota)</span>
+                  </span>
+                ) : googleAuthStatus.resolvedAuthType === 'service_account' ? (
+                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 shadow-xs">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Service Account (Drive storage quota limits apply)</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1.5 shadow-xs">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                    <span>Auth Not Configured</span>
+                  </span>
+                )
+              ) : (
+                <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  Checking auth...
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowDiagnosticsPanel(!showDiagnosticsPanel)}
+                className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-lg bg-[#FAF7F0] hover:bg-[#F2ECE1] text-[#0A192F] border border-[#D8D0BA] transition-colors cursor-pointer"
+              >
+                <span>{showDiagnosticsPanel ? 'Hide Details' : 'View Diagnostics'}</span>
+                {showDiagnosticsPanel ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Expanded Diagnostics Details */}
+          {showDiagnosticsPanel && (
+            <div className="pt-3 border-t border-[#E5DEC9] space-y-4 animate-in fade-in-50 duration-150">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                {/* Client ID */}
+                <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
+                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> OAuth Client ID</span>
+                    <span className={googleAuthStatus?.hasOAuthClientId ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
+                      {googleAuthStatus?.hasOAuthClientId ? 'PRESENT' : 'MISSING'}
+                    </span>
+                  </div>
+                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
+                    {googleAuthStatus?.hasOAuthClientId ? `Set (${googleAuthStatus.oauthClientIdLength} chars)` : 'GOOGLE_OAUTH_CLIENT_ID not set'}
+                  </p>
+                </div>
+
+                {/* Client Secret */}
+                <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
+                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> OAuth Client Secret</span>
+                    <span className={googleAuthStatus?.hasOAuthClientSecret ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
+                      {googleAuthStatus?.hasOAuthClientSecret ? 'PRESENT' : 'MISSING'}
+                    </span>
+                  </div>
+                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
+                    {googleAuthStatus?.hasOAuthClientSecret ? `Set (${googleAuthStatus.oauthClientSecretLength} chars)` : 'GOOGLE_OAUTH_CLIENT_SECRET not set'}
+                  </p>
+                </div>
+
+                {/* Refresh Token */}
+                <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
+                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> OAuth Refresh Token</span>
+                    <span className={googleAuthStatus?.hasOAuthRefreshToken ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
+                      {googleAuthStatus?.hasOAuthRefreshToken ? 'PRESENT' : 'MISSING'}
+                    </span>
+                  </div>
+                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
+                    {googleAuthStatus?.hasOAuthRefreshToken
+                      ? `Prefix: ${googleAuthStatus.oauthRefreshTokenPrefix}... (${googleAuthStatus.oauthRefreshTokenLength} chars)`
+                      : 'GOOGLE_OAUTH_REFRESH_TOKEN not set'}
+                  </p>
+                </div>
+
+                {/* Service Account */}
+                <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
+                    <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-[#1B4D36]" /> Service Account Key</span>
+                    <span className={googleAuthStatus?.hasServiceAccountPrivateKey ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
+                      {googleAuthStatus?.hasServiceAccountPrivateKey ? 'PRESENT' : 'NOT SET'}
+                    </span>
+                  </div>
+                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
+                    {googleAuthStatus?.hasServiceAccountPrivateKey ? 'GOOGLE_PRIVATE_KEY loaded' : 'Not configured'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Target Resources Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-[#FAF7F0] p-3 rounded-xl border border-[#E5DEC9]">
+                <div className="flex items-center gap-2 text-slate-700">
+                  <HardDrive className="w-4 h-4 text-[#1B4D36] shrink-0" />
+                  <span className="font-semibold text-slate-500">Google Drive Folder:</span>
+                  <span className="font-mono text-[#0A192F] font-bold truncate">
+                    {googleAuthStatus?.driveFolderId || 'Root / Default App Folder'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-700">
+                  <FileSpreadsheet className="w-4 h-4 text-[#1B4D36] shrink-0" />
+                  <span className="font-semibold text-slate-500">Google Sheet:</span>
+                  <span className="font-mono text-[#0A192F] font-bold truncate">
+                    {googleAuthStatus?.spreadsheetId || 'Default Spreadsheet'} ({googleAuthStatus?.sheetName || 'Candidate_Interviews'})
+                  </span>
+                </div>
+              </div>
+
+              {/* Diagnostic Advice */}
+              {googleAuthStatus?.resolvedAuthType === 'service_account' && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                    <Info className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Why you may see "Service Accounts do not have storage quota":</span>
+                  </div>
+                  <p className="leading-relaxed text-slate-800">
+                    Google Drive disables video storage quota for GCP Service Accounts on personal Drive storage. To use OAuth2 personal storage quota, you must define <strong>all three</strong> variables in your hosting dashboard: <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">GOOGLE_OAUTH_CLIENT_ID</code>, <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">GOOGLE_OAUTH_CLIENT_SECRET</code>, and <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">GOOGLE_OAUTH_REFRESH_TOKEN</code>. If any of the 3 is missing, the server falls back to Service Account auth.
+                  </p>
+                </div>
+              )}
+
+              {/* Actions & Live Connection Test */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestGooglePermissions}
+                    disabled={isTestingPermissions}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-[#1B4D36] hover:bg-[#143D2B] transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isTestingPermissions ? 'animate-spin' : ''}`} />
+                    <span>{isTestingPermissions ? 'Testing Live Access...' : 'Test Google Drive & Sheets Access'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={fetchGoogleAuthStatus}
+                    disabled={isLoadingAuthStatus}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-[#FAF7F0] text-[#0A192F] border border-[#D8D0BA] transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isLoadingAuthStatus ? 'animate-spin' : ''}`} />
+                    <span>Re-check Config</span>
+                  </button>
+                </div>
+
+                <span className="text-[10px] text-slate-500 font-mono">
+                  Diagnostics endpoint: GET /api/admin/google-auth-status
+                </span>
+              </div>
+
+              {/* Test Permissions Result Banner */}
+              {testPermissionsResult && (
+                <div className={`p-3.5 rounded-xl border text-xs space-y-2 ${
+                  testPermissionsResult.overallSuccess
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                    : 'bg-amber-50 border-amber-300 text-amber-900'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold flex items-center gap-1.5">
+                      {testPermissionsResult.overallSuccess ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      )}
+                      Live Connection Test Result: {testPermissionsResult.overallSuccess ? 'All Services Reachable' : 'Attention Needed'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTestPermissionsResult(null)}
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2 rounded-lg bg-white/80 border border-slate-200">
+                      <strong>Google Sheets:</strong> {testPermissionsResult.sheets?.canAppend ? '✅ Append & Read OK' : `❌ ${testPermissionsResult.sheets?.error || 'Unavailable'}`}
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/80 border border-slate-200">
+                      <strong>Google Drive:</strong> {testPermissionsResult.drive?.canUpload ? '✅ Upload & Share OK' : `❌ ${testPermissionsResult.drive?.error || 'Unavailable'}`}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Global Delete / Notification Banner */}
         {deleteNotice && (
           <div className="max-w-7xl mx-auto p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between">
@@ -559,6 +928,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
+            {/* New Interview Live Notification Banner */}
+            {newInterviewBanner && (
+              <div className="mx-4 mt-3 p-3 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center gap-2.5 text-xs text-emerald-950 font-medium">
+                  <div className="p-1 bg-emerald-600 text-white rounded-md">
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </div>
+                  <span>
+                    <strong>{newInterviewBanner.count} new interview{newInterviewBanner.count > 1 ? 's' : ''}</strong> received from <strong>{newInterviewBanner.name}</strong> ({newInterviewBanner.domain}).
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewInterviewBanner(null)}
+                  className="text-emerald-700 hover:text-emerald-950 text-xs font-bold px-2 py-1 rounded-md hover:bg-emerald-100 cursor-pointer transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {/* Candidate Interview List */}
             <div className="divide-y divide-[#E5DEC9] overflow-y-auto max-h-[560px]">
               {interviews.length === 0 ? (
@@ -568,12 +958,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               ) : (
                 interviews.map((item) => {
                   const isSelected = selectedInterview?.id === item.id;
+                  const isNew = newlyArrivedIds.has(item.id);
                   return (
                     <div
                       key={item.id}
                       onClick={() => handleSelectInterview(item)}
                       className={`p-4 transition-colors cursor-pointer flex items-center justify-between gap-4 ${
-                        isSelected ? 'bg-[#EAF3EE] border-l-4 border-[#1B4D36]' : 'hover:bg-[#FAF7F0]'
+                        isSelected
+                          ? 'bg-[#EAF3EE] border-l-4 border-[#1B4D36]'
+                          : isNew
+                          ? 'bg-emerald-50/70 border-l-4 border-emerald-500 hover:bg-emerald-50'
+                          : 'hover:bg-[#FAF7F0]'
                       }`}
                     >
                       <div className="space-y-1 min-w-0 flex-1">
@@ -581,6 +976,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span className="font-bold text-sm text-[#0A192F] truncate">
                             {item.candidateName}
                           </span>
+                          {isNew && (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-emerald-600 text-white shadow-xs flex items-center gap-1 animate-pulse">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              NEW
+                            </span>
+                          )}
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${getStatusBadge(item.hrReviewStatus)}`}>
                             {item.hrReviewStatus.replace('_', ' ')}
                           </span>
