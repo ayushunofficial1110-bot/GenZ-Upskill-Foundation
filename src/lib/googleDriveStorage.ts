@@ -7,7 +7,7 @@ import { google } from 'googleapis';
 import { Readable } from 'stream';
 import fs from 'fs';
 import path from 'path';
-import { getGoogleAuthClient, getGoogleAccessToken, getGoogleConfigStatus } from './googleAuth';
+import { getGoogleDriveAuthClient, getGoogleDriveAccessToken, getGoogleConfigStatus } from './googleAuth';
 import { IStorageProvider, StorageUploadResult, LocalStorageProvider } from './storage';
 import { convertToStandardMp4 } from './videoConverter';
 
@@ -25,8 +25,8 @@ export interface DriveConfigStatus {
 export function getDriveConfigStatus(): DriveConfigStatus {
   const googleConfig = getGoogleConfigStatus();
   return {
-    isConfigured: Boolean(googleConfig.authType !== 'none'),
-    authType: googleConfig.authType,
+    isConfigured: Boolean(googleConfig.driveAuthType !== 'none'),
+    authType: googleConfig.driveAuthType,
     hasServiceAccount: Boolean(googleConfig.serviceAccountEmail),
     hasPrivateKey: googleConfig.hasPrivateKey,
     hasOAuthRefreshToken: googleConfig.hasOAuthRefreshToken,
@@ -118,10 +118,10 @@ export class GoogleDriveStorageProvider implements IStorageProvider {
     }
 
     // 3. Authenticate with Google
-    const auth = getGoogleAuthClient();
+    const auth = getGoogleDriveAuthClient();
     if (!auth) {
       const errorMsg =
-        'Google authentication unavailable. Please ensure GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY (or GOOGLE_OAUTH_REFRESH_TOKEN) are configured.';
+        'Google Drive authentication unavailable. Please ensure GOOGLE_DRIVE_OAUTH_CLIENT_ID, GOOGLE_DRIVE_OAUTH_CLIENT_SECRET, and GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN (or GOOGLE_PRIVATE_KEY) are configured.';
       console.error(`[GoogleDrive] ❌ ${errorMsg}`);
       throw new Error(errorMsg);
     }
@@ -155,7 +155,7 @@ export class GoogleDriveStorageProvider implements IStorageProvider {
 
     // 5. Try Direct Resumable Upload via HTTP with safe response parsing
     try {
-      const accessToken = await getGoogleAccessToken();
+      const accessToken = await getGoogleDriveAccessToken();
       if (accessToken) {
         console.log('[GoogleDrive] 🛰️ Initiating Resumable Upload session...');
         const initUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true';
@@ -322,7 +322,7 @@ export class GoogleDriveStorageProvider implements IStorageProvider {
     }
 
     // 2. Stream directly from Google Drive API using service account or oauth
-    const auth = getGoogleAuthClient();
+    const auth = getGoogleDriveAuthClient();
     if (!auth) return null;
 
     try {
@@ -355,7 +355,7 @@ export class GoogleDriveStorageProvider implements IStorageProvider {
     }
 
     // Delete Google Drive copy
-    const auth = getGoogleAuthClient();
+    const auth = getGoogleDriveAuthClient();
     if (auth && !storagePath.includes('/') && !storagePath.includes('\\')) {
       try {
         const drive = google.drive({ version: 'v3', auth: auth as any });

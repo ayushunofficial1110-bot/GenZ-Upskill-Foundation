@@ -5,7 +5,7 @@
 
 import { google } from 'googleapis';
 import {
-  getGoogleAuthClient,
+  getGoogleSheetsAuthClient,
   DEFAULT_SPREADSHEET_ID,
   DEFAULT_SHEET_NAME,
   DEFAULT_SERVICE_ACCOUNT_EMAIL,
@@ -128,9 +128,9 @@ export class GoogleSheetsService {
     options?: { reqStartTime?: number }
   ): Promise<{ success: boolean; rowIndex?: number; range?: string }> {
     const startTime = options?.reqStartTime || Date.now();
-    const auth = getGoogleAuthClient();
+    const auth = getGoogleSheetsAuthClient();
     if (!auth) {
-      const msg = 'Google Auth client unavailable. Check GOOGLE_PRIVATE_KEY and GOOGLE_SERVICE_ACCOUNT_EMAIL.';
+      const msg = 'Google Sheets Service Account Auth client unavailable. Check GOOGLE_PRIVATE_KEY and GOOGLE_SERVICE_ACCOUNT_EMAIL.';
       console.error(`[SHEETS] ❌ ${msg}`);
       throw new Error(msg);
     }

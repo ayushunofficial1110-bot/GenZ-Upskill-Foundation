@@ -43,12 +43,15 @@ import {
 interface GoogleAuthDiagnosticsResponse {
   hasOAuthClientId: boolean;
   oauthClientIdLength: number;
+  oauthClientIdMasked?: string;
   hasOAuthClientSecret: boolean;
   oauthClientSecretLength: number;
   hasOAuthRefreshToken: boolean;
   oauthRefreshTokenLength: number;
   oauthRefreshTokenPrefix: string;
-  resolvedAuthType: 'oauth2' | 'service_account' | 'none';
+  resolvedDriveAuthType?: 'oauth2' | 'service_account' | 'none';
+  resolvedSheetsAuthType?: 'service_account' | 'none';
+  resolvedAuthType?: 'oauth2' | 'service_account' | 'none';
   hasServiceAccountPrivateKey: boolean;
   serviceAccountEmail?: string;
   spreadsheetId?: string;
@@ -634,24 +637,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-start sm:self-center">
+            <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
               {googleAuthStatus ? (
-                googleAuthStatus.resolvedAuthType === 'oauth2' ? (
-                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-xs">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>OAuth2 Active (Personal Storage Quota)</span>
-                  </span>
-                ) : googleAuthStatus.resolvedAuthType === 'service_account' ? (
-                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 shadow-xs">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Service Account (Drive storage quota limits apply)</span>
-                  </span>
-                ) : (
-                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1.5 shadow-xs">
-                    <AlertCircle className="w-3.5 h-3.5 text-red-600" />
-                    <span>Auth Not Configured</span>
-                  </span>
-                )
+                <>
+                  {/* Google Drive Status Pill */}
+                  {(googleAuthStatus.resolvedDriveAuthType === 'oauth2' || googleAuthStatus.resolvedAuthType === 'oauth2') ? (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-xs">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Drive: OAuth2 Active</span>
+                    </span>
+                  ) : (googleAuthStatus.resolvedDriveAuthType === 'service_account' || googleAuthStatus.resolvedAuthType === 'service_account') ? (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-xs">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Drive: Service Account Fallback</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 shadow-xs">
+                      <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                      <span>Drive: Not Configured</span>
+                    </span>
+                  )}
+
+                  {/* Google Sheets Status Pill */}
+                  {googleAuthStatus.hasServiceAccountPrivateKey ? (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-300 flex items-center gap-1 shadow-xs">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Sheets: Service Account Active</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 shadow-xs">
+                      <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                      <span>Sheets: Key Missing</span>
+                    </span>
+                  )}
+                </>
               ) : (
                 <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
                   <RefreshCw className="w-3 h-3 animate-spin" />
@@ -677,33 +696,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {/* Client ID */}
                 <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
-                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> OAuth Client ID</span>
+                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> Drive OAuth Client ID</span>
                     <span className={googleAuthStatus?.hasOAuthClientId ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
                       {googleAuthStatus?.hasOAuthClientId ? 'PRESENT' : 'MISSING'}
                     </span>
                   </div>
-                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
-                    {googleAuthStatus?.hasOAuthClientId ? `Set (${googleAuthStatus.oauthClientIdLength} chars)` : 'GOOGLE_OAUTH_CLIENT_ID not set'}
+                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold truncate">
+                    {googleAuthStatus?.hasOAuthClientId ? (googleAuthStatus.oauthClientIdMasked || `Set (${googleAuthStatus.oauthClientIdLength} chars)`) : 'GOOGLE_DRIVE_OAUTH_CLIENT_ID not set'}
                   </p>
                 </div>
 
                 {/* Client Secret */}
                 <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
-                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> OAuth Client Secret</span>
+                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> Drive OAuth Secret</span>
                     <span className={googleAuthStatus?.hasOAuthClientSecret ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
                       {googleAuthStatus?.hasOAuthClientSecret ? 'PRESENT' : 'MISSING'}
                     </span>
                   </div>
                   <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
-                    {googleAuthStatus?.hasOAuthClientSecret ? `Set (${googleAuthStatus.oauthClientSecretLength} chars)` : 'GOOGLE_OAUTH_CLIENT_SECRET not set'}
+                    {googleAuthStatus?.hasOAuthClientSecret ? `Set (${googleAuthStatus.oauthClientSecretLength} chars)` : 'GOOGLE_DRIVE_OAUTH_CLIENT_SECRET not set'}
                   </p>
                 </div>
 
                 {/* Refresh Token */}
                 <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
-                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> OAuth Refresh Token</span>
+                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> Drive Refresh Token</span>
                     <span className={googleAuthStatus?.hasOAuthRefreshToken ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
                       {googleAuthStatus?.hasOAuthRefreshToken ? 'PRESENT' : 'MISSING'}
                     </span>
@@ -711,19 +730,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
                     {googleAuthStatus?.hasOAuthRefreshToken
                       ? `Prefix: ${googleAuthStatus.oauthRefreshTokenPrefix}... (${googleAuthStatus.oauthRefreshTokenLength} chars)`
-                      : 'GOOGLE_OAUTH_REFRESH_TOKEN not set'}
+                      : 'GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN not set'}
                   </p>
                 </div>
 
                 {/* Service Account */}
                 <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
-                    <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-[#1B4D36]" /> Service Account Key</span>
+                    <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-[#1B4D36]" /> Sheets Service Account</span>
                     <span className={googleAuthStatus?.hasServiceAccountPrivateKey ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
                       {googleAuthStatus?.hasServiceAccountPrivateKey ? 'PRESENT' : 'NOT SET'}
                     </span>
                   </div>
-                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
+                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold truncate">
                     {googleAuthStatus?.hasServiceAccountPrivateKey ? 'GOOGLE_PRIVATE_KEY loaded' : 'Not configured'}
                   </p>
                 </div>
@@ -733,32 +752,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-[#FAF7F0] p-3 rounded-xl border border-[#E5DEC9]">
                 <div className="flex items-center gap-2 text-slate-700">
                   <HardDrive className="w-4 h-4 text-[#1B4D36] shrink-0" />
-                  <span className="font-semibold text-slate-500">Google Drive Folder:</span>
+                  <span className="font-semibold text-slate-500">Google Drive:</span>
                   <span className="font-mono text-[#0A192F] font-bold truncate">
-                    {googleAuthStatus?.driveFolderId || 'Root / Default App Folder'}
+                    {googleAuthStatus?.driveFolderId ? `Folder: ${googleAuthStatus.driveFolderId}` : 'Root / Authenticated Drive'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-700">
                   <FileSpreadsheet className="w-4 h-4 text-[#1B4D36] shrink-0" />
-                  <span className="font-semibold text-slate-500">Google Sheet:</span>
+                  <span className="font-semibold text-slate-500">Google Sheets:</span>
                   <span className="font-mono text-[#0A192F] font-bold truncate">
                     {googleAuthStatus?.spreadsheetId || 'Default Spreadsheet'} ({googleAuthStatus?.sheetName || 'Candidate_Interviews'})
                   </span>
                 </div>
               </div>
-
-              {/* Diagnostic Advice */}
-              {googleAuthStatus?.resolvedAuthType === 'service_account' && (
-                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-amber-800">
-                    <Info className="w-4 h-4 text-amber-700 shrink-0" />
-                    <span>Why you may see "Service Accounts do not have storage quota":</span>
-                  </div>
-                  <p className="leading-relaxed text-slate-800">
-                    Google Drive disables video storage quota for GCP Service Accounts on personal Drive storage. To use OAuth2 personal storage quota, you must define <strong>all three</strong> variables in your hosting dashboard: <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">GOOGLE_OAUTH_CLIENT_ID</code>, <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">GOOGLE_OAUTH_CLIENT_SECRET</code>, and <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">GOOGLE_OAUTH_REFRESH_TOKEN</code>. If any of the 3 is missing, the server falls back to Service Account auth.
-                  </p>
-                </div>
-              )}
 
               {/* Actions & Live Connection Test */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -785,25 +791,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
 
                 <span className="text-[10px] text-slate-500 font-mono">
-                  Diagnostics endpoint: GET /api/admin/google-auth-status
+                  Drive: OAuth2 | Sheets: Service Account
                 </span>
               </div>
 
               {/* Test Permissions Result Banner */}
               {testPermissionsResult && (
                 <div className={`p-3.5 rounded-xl border text-xs space-y-2 ${
-                  testPermissionsResult.overallSuccess
+                  (testPermissionsResult.overallSuccess || (testPermissionsResult.sheetsOk && testPermissionsResult.driveOk))
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
                     : 'bg-amber-50 border-amber-300 text-amber-900'
                 }`}>
                   <div className="flex items-center justify-between">
                     <span className="font-bold flex items-center gap-1.5">
-                      {testPermissionsResult.overallSuccess ? (
+                      {(testPermissionsResult.overallSuccess || (testPermissionsResult.sheetsOk && testPermissionsResult.driveOk)) ? (
                         <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       ) : (
                         <AlertTriangle className="w-4 h-4 text-amber-600" />
                       )}
-                      Live Connection Test Result: {testPermissionsResult.overallSuccess ? 'All Services Reachable' : 'Attention Needed'}
+                      Live Connection Test Result: {(testPermissionsResult.overallSuccess || (testPermissionsResult.sheetsOk && testPermissionsResult.driveOk)) ? 'All Services Reachable' : 'Attention Needed'}
                     </span>
                     <button
                       type="button"
@@ -815,10 +821,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                     <div className="p-2 rounded-lg bg-white/80 border border-slate-200">
-                      <strong>Google Sheets:</strong> {testPermissionsResult.sheets?.canAppend ? '✅ Append & Read OK' : `❌ ${testPermissionsResult.sheets?.error || 'Unavailable'}`}
+                      <strong>Google Sheets (Service Account):</strong>{' '}
+                      {testPermissionsResult.sheetsOk || testPermissionsResult.sheets?.canAppend
+                        ? `✅ Reachable (${testPermissionsResult.spreadsheetTitle || 'Sheet OK'})`
+                        : `❌ ${testPermissionsResult.sheetsError || testPermissionsResult.sheets?.error || 'Unavailable'}`}
                     </div>
                     <div className="p-2 rounded-lg bg-white/80 border border-slate-200">
-                      <strong>Google Drive:</strong> {testPermissionsResult.drive?.canUpload ? '✅ Upload & Share OK' : `❌ ${testPermissionsResult.drive?.error || 'Unavailable'}`}
+                      <strong>Google Drive (OAuth2):</strong>{' '}
+                      {testPermissionsResult.driveOk || testPermissionsResult.drive?.canUpload
+                        ? `✅ Reachable (${testPermissionsResult.driveFolderName || 'Drive OK'})`
+                        : `❌ ${testPermissionsResult.driveError || testPermissionsResult.drive?.error || 'Unavailable'}`}
                     </div>
                   </div>
                 </div>

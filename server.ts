@@ -955,7 +955,8 @@ app.get('/api/admin/google-auth-status', authenticateAdmin, (req, res) => {
   try {
     const diagnostics = getGoogleAuthDiagnostics();
     console.log('[ADMIN:Diagnostics] 🔍 Google Auth status requested:', {
-      resolvedAuthType: diagnostics.resolvedAuthType,
+      resolvedDriveAuthType: diagnostics.resolvedDriveAuthType,
+      resolvedSheetsAuthType: diagnostics.resolvedSheetsAuthType,
       hasOAuthRefreshToken: diagnostics.hasOAuthRefreshToken,
       refreshTokenPrefix: diagnostics.oauthRefreshTokenPrefix,
       hasOAuthClientId: diagnostics.hasOAuthClientId,
