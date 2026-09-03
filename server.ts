@@ -16,6 +16,7 @@ import { db } from './src/lib/db';
 import { google } from 'googleapis';
 import { getStorageProvider, LocalStorageProvider } from './src/lib/storage';
 import { getDriveConfigStatus } from './src/lib/googleDriveStorage';
+import { getB2ConfigStatus } from './src/lib/backblazeStorage';
 import { DEFAULT_DOMAINS } from './src/lib/questions';
 import { getGoogleConfigStatus, testGooglePermissions, getGoogleAuthDiagnostics } from './src/lib/googleAuth';
 import { InterviewRecord } from './src/types';
@@ -69,12 +70,20 @@ if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
 // Log runtime configuration status on boot
 const configStatus = getGoogleConfigStatus();
 const driveStatus = getDriveConfigStatus();
+const b2Status = getB2ConfigStatus();
 
 console.log('---------------------------------------------------------');
 console.log(' GenZ Upskill Foundation Interview Server Starting...    ');
 console.log('---------------------------------------------------------');
-console.log(`[Storage] Video Storage Provider: Google Drive (${driveStatus.isConfigured ? 'Configured ✅' : 'Missing Service Account Key ⚠️'})`);
-console.log(`[Storage] Drive Folder ID Set   : ${driveStatus.hasFolderId ? `YES (${driveStatus.folderId})` : 'NO (Root / Service Account Drive)'}`);
+console.log(`[Storage] Active Video Provider : ${storageProvider.name.toUpperCase()} ${b2Status.isConfigured ? '(Backblaze B2 S3-Compatible ✅)' : (driveStatus.isConfigured ? '(Google Drive ✅)' : '(Local Fallback ⚠️)')}`);
+if (b2Status.isConfigured) {
+  console.log(`[Storage] B2 Bucket Name        : ${b2Status.bucketName}`);
+  console.log(`[Storage] B2 Endpoint           : ${b2Status.endpoint} (Region: ${b2Status.region})`);
+  console.log(`[Storage] B2 Key ID Present     : YES (${b2Status.keyIdLength} chars)`);
+} else {
+  console.log(`[Storage] Google Drive Config   : ${driveStatus.isConfigured ? 'Configured ✅' : 'Not configured'}`);
+  console.log(`[Storage] Drive Folder ID Set   : ${driveStatus.hasFolderId ? `YES (${driveStatus.folderId})` : 'NO (Root / Service Account Drive)'}`);
+}
 console.log(`[Config] Google Service Account : ${configStatus.serviceAccountEmail}`);
 console.log(`[Config] Google Private Key     : ${configStatus.hasPrivateKey ? `YES (${configStatus.privateKeyLength} chars)` : 'NO (Missing/Empty)'}`);
 console.log(`[Config] Spreadsheet ID         : ${configStatus.spreadsheetId}`);
@@ -93,6 +102,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     time: new Date().toISOString(),
     storageProvider: storageProvider.name,
+    b2Config: getB2ConfigStatus(),
     driveConfig: getDriveConfigStatus(),
     googleConfig: {
       serviceAccount: configStatus.serviceAccountEmail,
@@ -366,12 +376,12 @@ async function processInterviewBackground(params: {
 
     const recordingPath = uploadResult.path || rawLocalPath;
     const recordingSize = uploadResult.sizeBytes || fileBuffer.length;
-    const driveFileId = uploadResult.driveFileId;
+    const driveFileId = uploadResult.driveFileId || uploadResult.path;
     const driveViewLink = uploadResult.driveViewLink || uploadResult.publicUrl || '';
     const driveDownloadLink = uploadResult.driveDownloadLink || driveViewLink;
 
-    if (!driveFileId) {
-      throw new Error('Google Drive upload did not return a valid file ID.');
+    if (!driveFileId && !uploadResult.path) {
+      throw new Error(`${storageProvider.name} upload did not return a valid file reference.`);
     }
 
     // 2. Update database record to 'completed' and sync to Google Sheets

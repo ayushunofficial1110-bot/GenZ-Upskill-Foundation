@@ -6,15 +6,19 @@
 import fs from 'fs';
 import path from 'path';
 import { GoogleDriveStorageProvider } from './googleDriveStorage';
+import { BackblazeB2StorageProvider, R2StorageProvider } from './backblazeStorage';
+
+export { BackblazeB2StorageProvider, R2StorageProvider };
 
 export interface StorageUploadResult {
   path: string;
-  provider: 'local' | 'googledrive';
+  provider: 'local' | 'googledrive' | 'b2' | 'backblaze';
   publicUrl?: string;
   sizeBytes: number;
   driveFileId?: string;
   driveViewLink?: string;
   driveDownloadLink?: string;
+  b2Key?: string;
 }
 
 export interface IStorageProvider {
@@ -28,6 +32,7 @@ export interface IStorageProvider {
       domain?: string;
       durationSeconds?: number;
       existingDriveFileId?: string;
+      existingObjectKey?: string;
       reqStartTime?: number;
     }
   ): Promise<StorageUploadResult>;
@@ -99,9 +104,21 @@ export class LocalStorageProvider implements IStorageProvider {
 
 /**
  * Factory that initializes active storage provider.
- * Defaults to GoogleDriveStorageProvider (Google Drive via Service Account) with local filesystem fallback.
+ * Priority:
+ * 1. Backblaze B2 Storage Provider (if B2_KEY_ID, B2_APPLICATION_KEY, and B2_BUCKET_NAME are set)
+ * 2. Google Drive Storage Provider (if Google OAuth or Service Account is configured)
+ * 3. Local Filesystem fallback
  */
 export function getStorageProvider(): IStorageProvider {
+  const b2KeyId = (process.env.B2_KEY_ID || '').trim();
+  const b2AppKey = (process.env.B2_APPLICATION_KEY || '').trim();
+  const b2Bucket = (process.env.B2_BUCKET_NAME || '').trim();
+
+  if (b2KeyId && b2AppKey && b2Bucket) {
+    console.log('[Storage] 🟢 Initializing Backblaze B2 Storage Provider (S3-compatible)...');
+    return new BackblazeB2StorageProvider();
+  }
+
   return new GoogleDriveStorageProvider();
 }
 
