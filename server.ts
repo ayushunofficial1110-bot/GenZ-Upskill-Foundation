@@ -15,8 +15,7 @@ import { createServer as createViteServer } from 'vite';
 import { db } from './src/lib/db';
 import { google } from 'googleapis';
 import { getStorageProvider, LocalStorageProvider } from './src/lib/storage';
-import { getDriveConfigStatus } from './src/lib/googleDriveStorage';
-import { getB2ConfigStatus } from './src/lib/backblazeStorage';
+import { getB2ConfigStatus, testB2Access } from './src/lib/b2Storage';
 import { DEFAULT_DOMAINS } from './src/lib/questions';
 import { getGoogleConfigStatus, testGooglePermissions, getGoogleAuthDiagnostics } from './src/lib/googleAuth';
 import { InterviewRecord } from './src/types';
@@ -69,27 +68,26 @@ if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
 
 // Log runtime configuration status on boot
 const configStatus = getGoogleConfigStatus();
-const driveStatus = getDriveConfigStatus();
 const b2Status = getB2ConfigStatus();
 
 console.log('---------------------------------------------------------');
 console.log(' GenZ Upskill Foundation Interview Server Starting...    ');
 console.log('---------------------------------------------------------');
-console.log(`[Storage] Active Video Provider : ${storageProvider.name.toUpperCase()} ${b2Status.isConfigured ? '(Backblaze B2 S3-Compatible ✅)' : (driveStatus.isConfigured ? '(Google Drive ✅)' : '(Local Fallback ⚠️)')}`);
+console.log(`[Storage] Active Video Provider : ${storageProvider.name.toUpperCase()} ${b2Status.isConfigured ? '(Backblaze B2 S3-Compatible ✅)' : '(Local Disk Fallback ⚠️)'}`);
 if (b2Status.isConfigured) {
   console.log(`[Storage] B2 Bucket Name        : ${b2Status.bucketName}`);
   console.log(`[Storage] B2 Endpoint           : ${b2Status.endpoint} (Region: ${b2Status.region})`);
-  console.log(`[Storage] B2 Key ID Present     : YES (${b2Status.keyIdLength} chars)`);
+  console.log(`[Storage] B2 Key ID Present     : YES (${b2Status.keyIdLength} chars, ${b2Status.keyIdMasked})`);
+  console.log(`[Storage] B2 App Key Present    : YES`);
 } else {
-  console.log(`[Storage] Google Drive Config   : ${driveStatus.isConfigured ? 'Configured ✅' : 'Not configured'}`);
-  console.log(`[Storage] Drive Folder ID Set   : ${driveStatus.hasFolderId ? `YES (${driveStatus.folderId})` : 'NO (Root / Service Account Drive)'}`);
+  console.log('[Storage] Backblaze B2          : NOT FULLY CONFIGURED (Using Local Disk Fallback)');
 }
-console.log(`[Config] Google Service Account : ${configStatus.serviceAccountEmail}`);
-console.log(`[Config] Google Private Key     : ${configStatus.hasPrivateKey ? `YES (${configStatus.privateKeyLength} chars)` : 'NO (Missing/Empty)'}`);
-console.log(`[Config] Spreadsheet ID         : ${configStatus.spreadsheetId}`);
-console.log(`[Config] Sheet Tab Name         : ${configStatus.sheetName}`);
-console.log(`[Config] Admin Username Set     : ${configStatus.hasAdminUsername ? 'YES' : 'NO (Missing/Empty)'}`);
-console.log(`[Config] Admin Password Set     : ${configStatus.hasAdminPassword ? 'YES' : 'NO (Missing/Empty)'}`);
+console.log(`[Sheets]  Google Service Account : ${configStatus.serviceAccountEmail}`);
+console.log(`[Sheets]  Google Private Key     : ${configStatus.hasPrivateKey ? `YES (${configStatus.privateKeyLength} chars)` : 'NO (Missing/Empty)'}`);
+console.log(`[Sheets]  Spreadsheet ID         : ${configStatus.spreadsheetId}`);
+console.log(`[Sheets]  Sheet Tab Name         : ${configStatus.sheetName}`);
+console.log(`[Config]  Admin Username Set     : ${configStatus.hasAdminUsername ? 'YES' : 'NO (Missing/Empty)'}`);
+console.log(`[Config]  Admin Password Set     : ${configStatus.hasAdminPassword ? 'YES' : 'NO (Missing/Empty)'}`);
 console.log('---------------------------------------------------------');
 
 // -------------------------------------------------------------
@@ -103,11 +101,9 @@ app.get('/api/health', (req, res) => {
     time: new Date().toISOString(),
     storageProvider: storageProvider.name,
     b2Config: getB2ConfigStatus(),
-    driveConfig: getDriveConfigStatus(),
-    googleConfig: {
+    googleSheetsConfig: {
       serviceAccount: configStatus.serviceAccountEmail,
       hasPrivateKey: configStatus.hasPrivateKey,
-      driveFolderId: configStatus.driveFolderId,
       spreadsheetId: configStatus.spreadsheetId,
       sheetName: configStatus.sheetName,
     },
@@ -133,7 +129,7 @@ app.get('/api/google/status', async (req, res) => {
     res.json({
       status: 'ok',
       googleConfig: getGoogleConfigStatus(),
-      driveConfig: getDriveConfigStatus(),
+      b2Config: getB2ConfigStatus(),
       diagnostics,
     });
   } catch (err: unknown) {
@@ -357,10 +353,10 @@ async function processInterviewBackground(params: {
     existingDriveFileId,
   } = params;
 
-  console.log(`[BACKGROUND] 🚀 Starting async processing for interview ${interviewId} ${new Date().toISOString()}${existingDriveFileId ? ` (existing Drive File: ${existingDriveFileId})` : ''}`);
+  console.log(`[BACKGROUND] 🚀 Starting async processing for interview ${interviewId} ${new Date().toISOString()}${existingDriveFileId ? ` (existing Storage Key: ${existingDriveFileId})` : ''}`);
 
   try {
-    // 1. Upload to Google Drive (converts to standardized MP4, saves local backup, uploads directly to Google Drive via Service Account)
+    // 1. Upload to Backblaze B2 (converts to standardized MP4, saves local backup, uploads to private S3 bucket)
     const uploadResult = await storageProvider.uploadRecording(
       interviewId,
       fileBuffer,
@@ -847,7 +843,7 @@ app.post('/api/admin/interviews/:id/retry-processing', authenticateAdmin, async 
     return res.status(isSuccess ? 200 : 500).json({
       success: isSuccess,
       message: isSuccess
-        ? `Interview '${interviewId}' converted to MP4 and synced to Google Drive & Google Sheets successfully.`
+        ? `Interview '${interviewId}' converted to MP4 and synced to Backblaze B2 & Google Sheets successfully.`
         : `Retry completed with errors: ${updatedInterview?.processingError || 'Unknown error'}`,
       interview: updatedInterview,
     });
@@ -960,7 +956,27 @@ app.post('/api/admin/questions', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Admin Google Auth Runtime Diagnostics Endpoint
+// Admin Backblaze B2 Storage Status Endpoint
+app.get('/api/admin/b2-status', authenticateAdmin, (req, res) => {
+  try {
+    const status = getB2ConfigStatus();
+    res.json(status);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Admin Test Live Backblaze B2 Access Endpoint
+app.get('/api/admin/test-b2-access', authenticateAdmin, async (req, res) => {
+  try {
+    const testResult = await testB2Access();
+    res.json(testResult);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Admin Google Auth Runtime Diagnostics Endpoint (Google Sheets)
 app.get('/api/admin/google-auth-status', authenticateAdmin, (req, res) => {
   try {
     const diagnostics = getGoogleAuthDiagnostics();

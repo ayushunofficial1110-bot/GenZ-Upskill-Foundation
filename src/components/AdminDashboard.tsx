@@ -40,6 +40,31 @@ import {
   Info,
 } from 'lucide-react';
 
+interface B2DiagnosticsResponse {
+  isConfigured: boolean;
+  hasKeyId: boolean;
+  keyIdLength: number;
+  keyIdMasked: string;
+  hasApplicationKey: boolean;
+  hasBucketName: boolean;
+  bucketName: string;
+  hasEndpoint: boolean;
+  endpoint: string;
+  region: string;
+}
+
+interface B2TestResult {
+  success: boolean;
+  bucketName: string;
+  endpoint: string;
+  region: string;
+  canReadBucket: boolean;
+  canPresign: boolean;
+  samplePresignedUrl?: string;
+  message?: string;
+  error?: string;
+}
+
 interface GoogleAuthDiagnosticsResponse {
   hasOAuthClientId: boolean;
   oauthClientIdLength: number;
@@ -91,7 +116,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const knownInterviewIdsRef = useRef<Set<string>>(new Set());
   const isInitialLoadRef = useRef(true);
 
-  // Google Auth Diagnostics State
+  // Backblaze B2 Diagnostics State
+  const [b2Status, setB2Status] = useState<B2DiagnosticsResponse | null>(null);
+  const [isLoadingB2Status, setIsLoadingB2Status] = useState(false);
+  const [b2TestResult, setB2TestResult] = useState<B2TestResult | null>(null);
+  const [isTestingB2, setIsTestingB2] = useState(false);
+
+  // Google Sheets Auth Diagnostics State
   const [googleAuthStatus, setGoogleAuthStatus] = useState<GoogleAuthDiagnosticsResponse | null>(null);
   const [isLoadingAuthStatus, setIsLoadingAuthStatus] = useState(false);
   const [testPermissionsResult, setTestPermissionsResult] = useState<any>(null);
@@ -123,6 +154,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setBaseUrl(window.location.origin);
     }
   }, []);
+
+  const fetchB2Status = async () => {
+    setIsLoadingB2Status(true);
+    try {
+      const res = await fetch('/api/admin/b2-status', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setB2Status(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch Backblaze B2 diagnostics:', err);
+    } finally {
+      setIsLoadingB2Status(false);
+    }
+  };
+
+  const handleTestB2Access = async () => {
+    setIsTestingB2(true);
+    setB2TestResult(null);
+    try {
+      const res = await fetch('/api/admin/test-b2-access', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setB2TestResult(data);
+    } catch (err: unknown) {
+      setB2TestResult({
+        success: false,
+        bucketName: b2Status?.bucketName || 'Unknown',
+        endpoint: b2Status?.endpoint || '',
+        region: b2Status?.region || '',
+        canReadBucket: false,
+        canPresign: false,
+        error: (err as Error).message || 'Failed to contact Backblaze B2 test endpoint',
+      });
+    } finally {
+      setIsTestingB2(false);
+    }
+  };
 
   const fetchGoogleAuthStatus = async () => {
     setIsLoadingAuthStatus(true);
@@ -238,6 +310,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Initial load and filter change trigger
   useEffect(() => {
     fetchDashboardData(false);
+    fetchB2Status();
     fetchGoogleAuthStatus();
   }, [domainFilter, statusFilter]);
 
@@ -489,6 +562,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             onClick={() => {
               fetchDashboardData(false);
+              fetchB2Status();
               fetchGoogleAuthStatus();
             }}
             disabled={isManualRefreshing}
@@ -620,63 +694,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
 
-        {/* Google Drive & Sheets Storage & Auth Diagnostics Panel */}
+        {/* Backblaze B2 & Google Sheets Storage Diagnostics Panel */}
         <div className="max-w-7xl mx-auto bg-[#FFFDF9] border border-[#D8D0BA] rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-[#FAF7F0] rounded-xl border border-[#D8D0BA] text-[#1B4D36]">
-                <ShieldCheck className="w-5 h-5" />
+                <HardDrive className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-[#0A192F] flex items-center gap-2">
-                  <span>Google Storage & Authentication Runtime Diagnostics</span>
+                  <span>Storage & Integration Runtime Diagnostics</span>
                 </h3>
                 <p className="text-xs text-slate-600">
-                  Real-time server configuration status for Google Drive video storage & Google Sheets sync.
+                  Real-time server configuration status for Backblaze B2 video storage (S3-compatible) & Google Sheets candidate records.
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
-              {googleAuthStatus ? (
-                <>
-                  {/* Google Drive Status Pill */}
-                  {(googleAuthStatus.resolvedDriveAuthType === 'oauth2' || googleAuthStatus.resolvedAuthType === 'oauth2') ? (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-xs">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Drive: OAuth2 Active</span>
-                    </span>
-                  ) : (googleAuthStatus.resolvedDriveAuthType === 'service_account' || googleAuthStatus.resolvedAuthType === 'service_account') ? (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-xs">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Drive: Service Account Fallback</span>
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 shadow-xs">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-600" />
-                      <span>Drive: Not Configured</span>
-                    </span>
-                  )}
-
-                  {/* Google Sheets Status Pill */}
-                  {googleAuthStatus.hasServiceAccountPrivateKey ? (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-300 flex items-center gap-1 shadow-xs">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Sheets: Service Account Active</span>
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 shadow-xs">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-600" />
-                      <span>Sheets: Key Missing</span>
-                    </span>
-                  )}
-                </>
+              {/* Backblaze B2 Status Pill */}
+              {b2Status ? (
+                b2Status.isConfigured ? (
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>B2: S3 Storage Active (Private)</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-xs">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>B2: Not Configured (Local Fallback)</span>
+                  </span>
+                )
               ) : (
                 <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
                   <RefreshCw className="w-3 h-3 animate-spin" />
-                  Checking auth...
+                  Checking B2...
                 </span>
               )}
+
+              {/* Google Sheets Status Pill */}
+              {googleAuthStatus ? (
+                googleAuthStatus.hasServiceAccountPrivateKey ? (
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-300 flex items-center gap-1 shadow-xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Sheets: Service Account Active</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 shadow-xs">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                    <span>Sheets: Key Missing</span>
+                  </span>
+                )
+              ) : null}
 
               <button
                 type="button"
@@ -693,57 +762,53 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {showDiagnosticsPanel && (
             <div className="pt-3 border-t border-[#E5DEC9] space-y-4 animate-in fade-in-50 duration-150">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                {/* Client ID */}
+                {/* B2 Key ID */}
                 <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
-                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> Drive OAuth Client ID</span>
-                    <span className={googleAuthStatus?.hasOAuthClientId ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
-                      {googleAuthStatus?.hasOAuthClientId ? 'PRESENT' : 'MISSING'}
+                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> B2 Key ID</span>
+                    <span className={b2Status?.hasKeyId ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
+                      {b2Status?.hasKeyId ? 'PRESENT' : 'MISSING'}
                     </span>
                   </div>
                   <p className="font-mono text-[11px] text-[#0A192F] font-semibold truncate">
-                    {googleAuthStatus?.hasOAuthClientId ? (googleAuthStatus.oauthClientIdMasked || `Set (${googleAuthStatus.oauthClientIdLength} chars)`) : 'GOOGLE_DRIVE_OAUTH_CLIENT_ID not set'}
+                    {b2Status?.hasKeyId ? (b2Status.keyIdMasked || `Set (${b2Status.keyIdLength} chars)`) : 'B2_KEY_ID not set'}
                   </p>
                 </div>
 
-                {/* Client Secret */}
+                {/* B2 Application Key */}
                 <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
-                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> Drive OAuth Secret</span>
-                    <span className={googleAuthStatus?.hasOAuthClientSecret ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
-                      {googleAuthStatus?.hasOAuthClientSecret ? 'PRESENT' : 'MISSING'}
+                    <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-[#1B4D36]" /> B2 Application Key</span>
+                    <span className={b2Status?.hasApplicationKey ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
+                      {b2Status?.hasApplicationKey ? 'PRESENT' : 'MISSING'}
                     </span>
                   </div>
                   <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
-                    {googleAuthStatus?.hasOAuthClientSecret ? `Set (${googleAuthStatus.oauthClientSecretLength} chars)` : 'GOOGLE_DRIVE_OAUTH_CLIENT_SECRET not set'}
+                    {b2Status?.hasApplicationKey ? 'Configured in Environment' : 'B2_APPLICATION_KEY not set'}
                   </p>
                 </div>
 
-                {/* Refresh Token */}
+                {/* B2 Bucket Name */}
                 <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
-                    <span className="flex items-center gap-1"><Key className="w-3 h-3 text-[#1B4D36]" /> Drive Refresh Token</span>
-                    <span className={googleAuthStatus?.hasOAuthRefreshToken ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
-                      {googleAuthStatus?.hasOAuthRefreshToken ? 'PRESENT' : 'MISSING'}
-                    </span>
-                  </div>
-                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold">
-                    {googleAuthStatus?.hasOAuthRefreshToken
-                      ? `Prefix: ${googleAuthStatus.oauthRefreshTokenPrefix}... (${googleAuthStatus.oauthRefreshTokenLength} chars)`
-                      : 'GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN not set'}
-                  </p>
-                </div>
-
-                {/* Service Account */}
-                <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
-                    <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-[#1B4D36]" /> Sheets Service Account</span>
-                    <span className={googleAuthStatus?.hasServiceAccountPrivateKey ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
-                      {googleAuthStatus?.hasServiceAccountPrivateKey ? 'PRESENT' : 'NOT SET'}
+                    <span className="flex items-center gap-1"><HardDrive className="w-3 h-3 text-[#1B4D36]" /> B2 Bucket</span>
+                    <span className={b2Status?.hasBucketName ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
+                      {b2Status?.hasBucketName ? 'CONFIGURED' : 'MISSING'}
                     </span>
                   </div>
                   <p className="font-mono text-[11px] text-[#0A192F] font-semibold truncate">
-                    {googleAuthStatus?.hasServiceAccountPrivateKey ? 'GOOGLE_PRIVATE_KEY loaded' : 'Not configured'}
+                    {b2Status?.bucketName || 'B2_BUCKET_NAME not set'}
+                  </p>
+                </div>
+
+                {/* B2 S3 Endpoint & Region */}
+                <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#E5DEC9] space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold uppercase">
+                    <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-[#1B4D36]" /> Endpoint & Region</span>
+                    <span className="text-emerald-700 font-bold uppercase">{b2Status?.region || 'us-west-004'}</span>
+                  </div>
+                  <p className="font-mono text-[11px] text-[#0A192F] font-semibold truncate" title={b2Status?.endpoint}>
+                    {b2Status?.endpoint || 'https://s3.us-west-004.backblazeb2.com'}
                   </p>
                 </div>
               </div>
@@ -751,10 +816,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* Target Resources Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-[#FAF7F0] p-3 rounded-xl border border-[#E5DEC9]">
                 <div className="flex items-center gap-2 text-slate-700">
-                  <HardDrive className="w-4 h-4 text-[#1B4D36] shrink-0" />
-                  <span className="font-semibold text-slate-500">Google Drive:</span>
+                  <ShieldCheck className="w-4 h-4 text-[#1B4D36] shrink-0" />
+                  <span className="font-semibold text-slate-500">Video Storage:</span>
                   <span className="font-mono text-[#0A192F] font-bold truncate">
-                    {googleAuthStatus?.driveFolderId ? `Folder: ${googleAuthStatus.driveFolderId}` : 'Root / Authenticated Drive'}
+                    Backblaze B2 (Private Bucket, 1-Hour Presigned URLs)
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-700">
@@ -766,50 +831,107 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Actions & Live Connection Test */}
+              {/* Actions & Live Connection Test Buttons */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Test B2 Access Button */}
+                  <button
+                    type="button"
+                    onClick={handleTestB2Access}
+                    disabled={isTestingB2}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-[#1B4D36] hover:bg-[#143D2B] transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isTestingB2 ? 'animate-spin' : ''}`} />
+                    <span>{isTestingB2 ? 'Testing B2 Access...' : 'Test B2 Access'}</span>
+                  </button>
+
+                  {/* Test Sheets Access Button */}
                   <button
                     type="button"
                     onClick={handleTestGooglePermissions}
                     disabled={isTestingPermissions}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-[#1B4D36] hover:bg-[#143D2B] transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-[#FAF7F0] text-[#0A192F] border border-[#D8D0BA] transition-colors cursor-pointer disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isTestingPermissions ? 'animate-spin' : ''}`} />
-                    <span>{isTestingPermissions ? 'Testing Live Access...' : 'Test Google Drive & Sheets Access'}</span>
+                    <span>{isTestingPermissions ? 'Testing Sheets...' : 'Test Sheets Access'}</span>
                   </button>
 
+                  {/* Re-check Config Button */}
                   <button
                     type="button"
-                    onClick={fetchGoogleAuthStatus}
-                    disabled={isLoadingAuthStatus}
+                    onClick={() => {
+                      fetchB2Status();
+                      fetchGoogleAuthStatus();
+                    }}
+                    disabled={isLoadingB2Status || isLoadingAuthStatus}
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-[#FAF7F0] text-[#0A192F] border border-[#D8D0BA] transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    <RefreshCw className={`w-3 h-3 ${isLoadingAuthStatus ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-3 h-3 ${isLoadingB2Status || isLoadingAuthStatus ? 'animate-spin' : ''}`} />
                     <span>Re-check Config</span>
                   </button>
                 </div>
 
                 <span className="text-[10px] text-slate-500 font-mono">
-                  Drive: OAuth2 | Sheets: Service Account
+                  Storage: Backblaze B2 (S3) | Records: Google Sheets (Service Account)
                 </span>
               </div>
 
-              {/* Test Permissions Result Banner */}
-              {testPermissionsResult && (
-                <div className={`p-3.5 rounded-xl border text-xs space-y-2 ${
-                  (testPermissionsResult.overallSuccess || (testPermissionsResult.sheetsOk && testPermissionsResult.driveOk))
+              {/* Backblaze B2 Live Connection Test Result Banner */}
+              {b2TestResult && (
+                <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                  b2TestResult.success
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                    : 'bg-red-50 border-red-300 text-red-900'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold flex items-center gap-1.5">
+                      {b2TestResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-red-600" />
+                      )}
+                      Backblaze B2 Live Connection Test: {b2TestResult.success ? 'Connected & Verified' : 'Connection Failed'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setB2TestResult(null)}
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {b2TestResult.success ? (
+                    <div className="space-y-1 text-[11px]">
+                      <p>
+                        ✅ <strong>Bucket Access:</strong> Successfully reached bucket <code className="bg-white/80 px-1 py-0.5 rounded font-mono font-bold text-emerald-800">{b2TestResult.bucketName}</code> on endpoint <code className="bg-white/80 px-1 py-0.5 rounded font-mono text-emerald-800">{b2TestResult.endpoint}</code> (Region: {b2TestResult.region}).
+                      </p>
+                      <p>
+                        🔐 <strong>Presigning Capability:</strong> Verified! S3-compatible time-limited presigned URLs generate correctly with 1-hour expiration.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] font-mono">
+                      ❌ {b2TestResult.error}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Google Sheets Test Result Banner */}
+              {testPermissionsResult && (
+                <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                  testPermissionsResult.sheetsOk || testPermissionsResult.sheets?.canAppend
+                    ? 'bg-blue-50 border-blue-300 text-blue-900'
                     : 'bg-amber-50 border-amber-300 text-amber-900'
                 }`}>
                   <div className="flex items-center justify-between">
                     <span className="font-bold flex items-center gap-1.5">
-                      {(testPermissionsResult.overallSuccess || (testPermissionsResult.sheetsOk && testPermissionsResult.driveOk)) ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      {testPermissionsResult.sheetsOk || testPermissionsResult.sheets?.canAppend ? (
+                        <CheckCircle2 className="w-4 h-4 text-blue-600" />
                       ) : (
                         <AlertTriangle className="w-4 h-4 text-amber-600" />
                       )}
-                      Live Connection Test Result: {(testPermissionsResult.overallSuccess || (testPermissionsResult.sheetsOk && testPermissionsResult.driveOk)) ? 'All Services Reachable' : 'Attention Needed'}
+                      Google Sheets Connection Test: {testPermissionsResult.sheetsOk || testPermissionsResult.sheets?.canAppend ? 'Reachable' : 'Attention Needed'}
                     </span>
                     <button
                       type="button"
@@ -819,20 +941,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                    <div className="p-2 rounded-lg bg-white/80 border border-slate-200">
-                      <strong>Google Sheets (Service Account):</strong>{' '}
-                      {testPermissionsResult.sheetsOk || testPermissionsResult.sheets?.canAppend
-                        ? `✅ Reachable (${testPermissionsResult.spreadsheetTitle || 'Sheet OK'})`
-                        : `❌ ${testPermissionsResult.sheetsError || testPermissionsResult.sheets?.error || 'Unavailable'}`}
-                    </div>
-                    <div className="p-2 rounded-lg bg-white/80 border border-slate-200">
-                      <strong>Google Drive (OAuth2):</strong>{' '}
-                      {testPermissionsResult.driveOk || testPermissionsResult.drive?.canUpload
-                        ? `✅ Reachable (${testPermissionsResult.driveFolderName || 'Drive OK'})`
-                        : `❌ ${testPermissionsResult.driveError || testPermissionsResult.drive?.error || 'Unavailable'}`}
-                    </div>
-                  </div>
+                  <p className="text-[11px]">
+                    {testPermissionsResult.sheetsOk || testPermissionsResult.sheets?.canAppend
+                      ? `✅ Google Sheets Service Account active: "${testPermissionsResult.spreadsheetTitle || 'Spreadsheet OK'}"`
+                      : `❌ ${testPermissionsResult.sheetsError || testPermissionsResult.sheets?.error || 'Unavailable'}`}
+                  </p>
                 </div>
               )}
             </div>

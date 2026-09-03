@@ -5,18 +5,17 @@
 
 import fs from 'fs';
 import path from 'path';
-import { GoogleDriveStorageProvider } from './googleDriveStorage';
-import { BackblazeB2StorageProvider, R2StorageProvider } from './backblazeStorage';
+import { B2StorageProvider, BackblazeB2StorageProvider, R2StorageProvider } from './b2Storage';
 
-export { BackblazeB2StorageProvider, R2StorageProvider };
+export { B2StorageProvider, BackblazeB2StorageProvider, R2StorageProvider };
 
 export interface StorageUploadResult {
   path: string;
-  provider: 'local' | 'googledrive' | 'b2' | 'backblaze';
+  provider: 'local' | 'b2' | 'backblaze';
   publicUrl?: string;
   sizeBytes: number;
-  driveFileId?: string;
-  driveViewLink?: string;
+  driveFileId?: string; // Kept for backwards-compatible DB schema mapping (stores B2 object key)
+  driveViewLink?: string; // Kept for backwards-compatible DB schema mapping (empty for private B2)
   driveDownloadLink?: string;
   b2Key?: string;
 }
@@ -42,7 +41,7 @@ export interface IStorageProvider {
 }
 
 /**
- * Local Filesystem Storage Provider (Default local & fallback).
+ * Local Filesystem Storage Provider (Fallback when B2 is not configured).
  * Stores files securely inside the private `uploads/recordings` directory.
  */
 export class LocalStorageProvider implements IStorageProvider {
@@ -71,6 +70,7 @@ export class LocalStorageProvider implements IStorageProvider {
       path: filename,
       provider: 'local',
       sizeBytes: fileBuffer.length,
+      driveFileId: filename,
     };
   }
 
@@ -106,8 +106,9 @@ export class LocalStorageProvider implements IStorageProvider {
  * Factory that initializes active storage provider.
  * Priority:
  * 1. Backblaze B2 Storage Provider (if B2_KEY_ID, B2_APPLICATION_KEY, and B2_BUCKET_NAME are set)
- * 2. Google Drive Storage Provider (if Google OAuth or Service Account is configured)
- * 3. Local Filesystem fallback
+ * 2. Local Filesystem Provider (Fallback)
+ * 
+ * Note: Google Drive is completely deprecated and removed for video storage.
  */
 export function getStorageProvider(): IStorageProvider {
   const b2KeyId = (process.env.B2_KEY_ID || '').trim();
@@ -116,9 +117,11 @@ export function getStorageProvider(): IStorageProvider {
 
   if (b2KeyId && b2AppKey && b2Bucket) {
     console.log('[Storage] 🟢 Initializing Backblaze B2 Storage Provider (S3-compatible)...');
-    return new BackblazeB2StorageProvider();
+    return new B2StorageProvider();
   }
 
-  return new GoogleDriveStorageProvider();
+  console.warn(
+    '[Storage] ⚠️ Backblaze B2 credentials (B2_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET_NAME) not fully set. Falling back to Local Disk Storage.'
+  );
+  return new LocalStorageProvider();
 }
-
